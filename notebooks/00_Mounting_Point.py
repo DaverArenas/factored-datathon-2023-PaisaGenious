@@ -11,7 +11,3 @@ dbutils.fs.mount(
         "fs.azure.sas." + container_name + "." + storage_account_name + ".blob.core.windows.net": sas_token
     }
 )
-
-# COMMAND ----------
-
-# MAGIC %fs ls mnt/azure-data-lake/amazon_reviews/partition_1/
