@@ -11,3 +11,10 @@ dbutils.fs.mount(
         "fs.azure.sas." + container_name + "." + storage_account_name + ".blob.core.windows.net": sas_token
     }
 )
+
+# COMMAND ----------
+
+aws_bucket_name = "1-factored-datathon-2023-lakehouse"
+mount_name = "aws-s3-datalake"
+dbutils.fs.mount(f"s3a://{aws_bucket_name}", f"/mnt/{mount_name}")
+display(dbutils.fs.ls(f"/mnt/{mount_name}"))
