@@ -41,11 +41,5 @@ WHEN NOT MATCHED THEN INSERT *
 
 -- COMMAND ----------
 
-SELECT*
-FROM bronze.amazon_reviews
-LIMIT 10
-
--- COMMAND ----------
-
 select count(*)
 from bronze.amazon_stream
