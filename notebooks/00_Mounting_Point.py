@@ -18,3 +18,7 @@ aws_bucket_name = "1-factored-datathon-2023-lakehouse"
 mount_name = "aws-s3-datalake"
 dbutils.fs.mount(f"s3a://{aws_bucket_name}", f"/mnt/{mount_name}")
 display(dbutils.fs.ls(f"/mnt/{mount_name}"))
+
+# COMMAND ----------
+
+# MAGIC %fs ls mnt/aws-s3-datalake/

@@ -45,9 +45,16 @@ silver_amazon_s_reviews = spark.readStream \
                             .option("checkpointLocation", checkpoint_reviews_s_silver) \
                             .trigger(availableNow=True) \
                             .toTable(silver_s_reviews)
+silver_amazon_s_reviews.awaitTermination()
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC select count(*)
 # MAGIC from silver.amazon_reviews_stream
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select count(*)
+# MAGIC from bronze.eh_stream

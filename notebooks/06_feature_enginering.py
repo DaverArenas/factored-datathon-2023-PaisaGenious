@@ -6,28 +6,13 @@ from pyspark.sql import functions as F
 
 # COMMAND ----------
 
-# DBTITLE 1,queries to access subfields in struct types
-# %sql
-# select details
-# from silver.amazon_metadata_clean
-# where details.Batteries is not null
-# limit 100
-display(spark.table("silver.amazon_metadata_clean") \
-        .where("details.Batteries is not null") \
-        .limit(1)
-)
-
-# COMMAND ----------
-
-df = spark.table("silver.amazon_metadata_clean")
+df = spark.table("silver.amazon_metadata_test")
 df = df.withColumnRenamed("asin", "asin_metadata")
 keys = df.select("details.*").columns
 for key in keys:
     df = df.withColumn(key.replace(".", "_"), col("details").getItem(key))
 
 df = df.drop("Audio CD")
-
-display(df)
 
 # COMMAND ----------
 
@@ -36,12 +21,8 @@ df = df.toDF(*new_column_names)
 
 # COMMAND ----------
 
-df.columns
-
-# COMMAND ----------
-
 # MAGIC %sql
-# MAGIC drop table silver.metadata_details
+# MAGIC --drop table silver.metadata_details
 
 # COMMAND ----------
 
@@ -49,11 +30,13 @@ df.write \
 .format("delta") \
 .option("overwriteSchema", "true") \
 .option("delta.columnMapping.mode", "name") \
-.saveAsTable("silver.metadata_details")
+.mode("overwrite") \
+.saveAsTable("silver.metadata_details_test")
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC select*
-# MAGIC from silver.metadata_details
+# MAGIC from silver.metadata_details_test
+# MAGIC where Batteries is not null
 # MAGIC limit 100
