@@ -1,15 +1,31 @@
 # Databricks notebook source
+!pip install nltk
+
+# COMMAND ----------
+
 # MAGIC %md
-# MAGIC #Exploratory Data Analysis
+# MAGIC #Data cleaning and feature extraction
 # MAGIC
 
 # COMMAND ----------
 
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, count, when,round,explode, split, regexp_extract, collect_list,expr,when, year, month
+from pyspark.sql.functions import col, count, when,round,explode, split, regexp_extract, collect_list,expr,when, year, month,coalesce,size
 import matplotlib.pyplot as plt
 from pyspark.sql import functions as F
 from datetime import datetime, timedelta
+from pyspark.sql.window import Window
+from pyspark.sql.types import IntegerType, StringType,FloatType
+import string
+
+from pyspark.sql import SparkSession
+import matplotlib.pyplot as plt
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import re
+
+
 
 # COMMAND ----------
 
@@ -20,14 +36,12 @@ from datetime import datetime, timedelta
 
 # Reading the data from the Gold schema
 df_reviews = spark.table("silver.amazon_reviews")
-df_metadata = spark.table("silver.amazon_metadata")
+df_reviews_streaming=spark.table("silver.amazon_reviews_stream")
 
 # COMMAND ----------
 
-total_rows_reviews = df_reviews.count()
-total_rows_metadata = df_metadata.count()
-print("Number of rows in the DataFrame of amazon reviews: ", total_rows_reviews)
-print("Number of rows in the DataFrame of amazon metadata: ", total_rows_metadata)
+# MAGIC %md
+# MAGIC ### Amazon reviews
 
 # COMMAND ----------
 
@@ -35,11 +49,96 @@ display(df_reviews)
 
 # COMMAND ----------
 
-display(df_metadata)
+total_rows_reviews = df_reviews.count()
+print("Number of rows in the DataFrame of amazon reviews: ", total_rows_reviews)
 
 # COMMAND ----------
 
-distinct_keys
+total_rows_reviews_streaming = df_reviews_streaming.count()
+print("Number of rows in the DataFrame of amazon reviews: ", total_rows_reviews_streaming)
+
+# COMMAND ----------
+
+# how many unique products
+unique_product= df_reviews.select("asin").distinct().count()
+print("Number of unique products in the DataFrame of amazon reviews: ", unique_product)
+# how many unique reviewText per user
+unique_reviews = df_reviews.select("reviewText").distinct().count()
+print("Number of unique reviews in the DataFrame of amazon reviews: ", unique_reviews)
+# how many unique reviewText per user
+unique_users = df_reviews.select("reviewerID").distinct().count()
+print("Number of unique users in the DataFrame of amazon reviews: ", unique_users)
+
+# COMMAND ----------
+
+# how many unique products
+unique_product= df_reviews_streaming.select("asin").distinct().count()
+print("Number of unique products in the DataFrame of amazon reviews streaming: ", unique_product)
+# how many unique reviewText per user
+unique_reviews = df_reviews_streaming.select("reviewText").distinct().count()
+print("Number of unique reviews in the DataFrame of amazon reviews streaming: ", unique_reviews)
+# how many unique reviewText per user
+unique_users = df_reviews_streaming.select("reviewerID").distinct().count()
+print("Number of unique users in the DataFrame of amazon reviews streaming: ", unique_users)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC We ave 2 dataset with the same kind of information so we are going to join them and get just one dataset
+
+# COMMAND ----------
+
+# Perform vertical concatenation (union) using the union method
+df_reviews_final = df_reviews.union(df_reviews_streaming)
+
+# COMMAND ----------
+
+# how many unique products
+unique_product= df_reviews_final.select("asin").distinct().count()
+print("Number of unique products in the DataFrame of amazon reviews streaming: ", unique_product)
+# how many unique reviewText per user
+unique_reviews = df_reviews_final.select("reviewText").distinct().count()
+print("Number of unique reviews in the DataFrame of amazon reviews streaming: ", unique_reviews)
+# how many unique reviewText per user
+unique_users = df_reviews_final.select("reviewerID").distinct().count()
+print("Number of unique users in the DataFrame of amazon reviews streaming: ", unique_users)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Checking duplicated rows
+
+# COMMAND ----------
+
+# Create a Window specification to partition by 'user' and order by 'reviewText'
+window_spec = Window.partitionBy("reviewerID").orderBy("reviewText")
+
+# Add a new column 'duplicate_count' that counts the occurrences of each reviewText within each user
+df_with_duplicates = df_reviews.withColumn("duplicate_count", F.count("reviewText").over(window_spec))
+
+# Filter out rows where 'duplicate_count' is greater than 1 to find duplicate reviews for the same user
+duplicate_user_reviews_df = df_with_duplicates.filter(col("duplicate_count") > 1)
+
+#  Drop duplicates and keep only distinct rows for the duplicates
+# Assuming df is your DataFrame
+distinct_duplicate_user_reviews_df = duplicate_user_reviews_df.select("asin","reviewerID","reviewText","unixReviewTime","duplicate_count").dropDuplicates()
+
+# Step 5: Show the DataFrame containing duplicate reviews for the same user
+print("Duplicate Reviews for the Same User:")
+display(distinct_duplicate_user_reviews_df)
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC So we can notice that we have a lot of duplicated reviews so we are going to delete these duplicated rows
+
+# COMMAND ----------
+
+# Drop duplicates based on 'reviewerID', 'asin', and 'reviewText'
+df_no_duplicates = df_reviews.dropDuplicates(subset=['reviewerID', 'asin', 'reviewText',"unixReviewTime","overall","summary"])
+total_rows_reviews = df_no_duplicates.count()
+print("Number of rows in the DataFrame of amazon reviews: ", total_rows_reviews)
 
 # COMMAND ----------
 
@@ -71,13 +170,8 @@ def calculate_nulls(df: DataFrame) -> DataFrame:
 
 # COMMAND ----------
 
-null_reviews=calculate_nulls(df_reviews)
+null_reviews=calculate_nulls(df_no_duplicates)
 display(null_reviews)
-
-# COMMAND ----------
-
-null_metadata=calculate_nulls(df_metadata)
-display(null_metadata)
 
 # COMMAND ----------
 
@@ -109,116 +203,330 @@ def delete_nulls(df: DataFrame,null_threshold: float = 70.0) -> DataFrame:
 
 # COMMAND ----------
 
-new_dfrev=delete_nulls(df_reviews)
-
-# COMMAND ----------
-
-new_dfmet=delete_nulls(df_metadata)
+new_dfrev=delete_nulls(df_no_duplicates)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Data Analysis DF Amazon Reviews
+# MAGIC We are also going to impute the null values in the column reviewText with the information of the summary column, and if both columns are nulls then we are going to delete it 
+
+# COMMAND ----------
+
+# Impute 'reviewText' with 'summary' column if 'reviewText' is null
+df_imputed = new_dfrev.withColumn("reviewText", coalesce(col("reviewText"), col("summary")))
+
+# Drop rows where both 'reviewText' and 'summary' are null
+df_cleaned_review = df_imputed.dropna(subset=["reviewText", "summary"])
+
+# Show the DataFrame after imputing and removing null rows
+null_reviews=calculate_nulls(df_cleaned_review)
+#display(null_reviews)
+
+# COMMAND ----------
+
+df_cleaned_review.write \
+    .format("delta") \
+    .mode("append") \
+    .option("overwriteSchema", "true") \
+    .save("s3://1-factored-datathon-2023-lakehouse/Bronze/final_review")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ##### Distribution of overall rating
+# MAGIC #### Feature extraction
 
 # COMMAND ----------
 
-# Count the occurrences of each rating value
-rating_counts = new_dfrev.groupBy('overall').count().orderBy('overall')
-display(rating_counts)
+# MAGIC %md
+# MAGIC ######1. Number of stopwords
 
 # COMMAND ----------
 
-# MAGIC %md 
-# MAGIC ##### Relationship between verified purchases and overall ratings
+nltk.download('stopwords')
+stop = stopwords.words('english')
 
-# COMMAND ----------
+def remove_stopwords(text):
+    return len([word for word in text.split() if word.lower() not in stop])
 
-# Filter data for verified purchases with 'overall' rating
-verified_purchases = new_dfrev.select('verified','overall')
+remove_stopwords_udf = udf(remove_stopwords, IntegerType())
 
-# Show the DataFrame with both verified and not verified purchases and their 'overall' ratings
-display(verified_purchases)
+df_cleaned_review= df_cleaned_review.withColumn('stopwords', remove_stopwords_udf(col('reviewText')))
 
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ##### Distribution of review lenghts in characters
+# MAGIC ######2. Number of Punctuation
 
 # COMMAND ----------
 
-# Calculate the length of each review in characters
-new_dfrev = new_dfrev.withColumn('review_length_chars', F.length('reviewText'))
-display(new_dfrev.select('review_length_chars'))
+# Function to count punctuation
+def count_punct(text):
+    return sum(1 for char in text if char in string.punctuation)
 
-# COMMAND ----------
+# Register UDF
+count_punct_udf = udf(count_punct, IntegerType())
 
-# MAGIC %md
-# MAGIC ##### Distribution of review lenghts in words
-
-# COMMAND ----------
-
-# Calculate the length of each review in words and create a new column 'review_length_words'
-new_dfrev = new_dfrev.withColumn('review_length_words', F.size(F.split(new_dfrev['reviewText'], ' ')))
-display(new_dfrev.select('review_length_words'))
+# Apply UDF to calculate the number of punctuation marks in each text
+df_cleaned_review = df_cleaned_review.withColumn('punctuation', count_punct_udf(col('reviewText')))
+#display(df_cleaned_review.select("reviewText","punctuation","stopwords"))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ##### Relationship between length of the review and overall ratings
-
-# COMMAND ----------
-
-# Collect the data to the driver as Pandas DataFrames for plotting
-new_dfrev.select('review_length_words', 'overall')
-display(new_dfrev.select('review_length_words', 'overall'))
+# MAGIC ###Text cleaning techniques
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ##### Time series analysis
+# MAGIC ###### Make all text lower case
+# MAGIC
+# MAGIC The first pre-processing step which we will do is transform our reviews into lower case. This avoids having multiple copies of the same words. For example, while calculating the word count, ‘Analytics’ and ‘analytics’ will be taken as different words
 
 # COMMAND ----------
 
-#average ratings grouped by 'reviewTime')
-averageRatingsByDate = new_dfrev \
-    .groupBy("unixReviewTime") \
-    .agg(F.avg("overall").alias("averageRating")) \
-    .orderBy("unixReviewTime")
+# Function to convert text to lowercase and join
+def lowercase_and_join(text):
+    return " ".join(word.lower() for word in text.split())
 
-# Display the Results
-display(averageRatingsByDate)
+# Register UDF
+lowercase_and_join_udf = udf(lowercase_and_join, StringType())
 
+# Apply UDF to convert the text to lowercase and join it back
+df_cleaned_review= df_cleaned_review.withColumn('lowerReviewText', lowercase_and_join_udf(col('reviewText')))
 
-# COMMAND ----------
-
-# Extract year and month from the 'unixReviewTime' column
-averageRatingsByDate = new_dfrev.withColumn("year", year("unixReviewTime")).withColumn("month", month("unixReviewTime"))
-
-# Group by year and month and calculate the average rating
-averageRatingsByMonthYear = averageRatingsByDate \
-    .groupBy("year", "month") \
-    .agg(F.avg("overall").alias("averageRating")) \
-    .orderBy("year", "month")
-
-# Get the last year from the DataFrame
-last_year = averageRatingsByMonthYear.select("year").distinct().orderBy("year", ascending=False).limit(1).collect()[0]["year"]
-
-# Filter the data to include only the last five years
-averageRatingsLastFiveYears = averageRatingsByMonthYear.filter((averageRatingsByDate["year"] >= last_year-4) & (averageRatingsByMonthYear["year"] <= last_year))
-
-display(averageRatingsLastFiveYears)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Data Analysis DF Amazon Metadata
+# MAGIC ###### Removing punctuation
 
 # COMMAND ----------
 
-display(df_streaming)
+# Function to remove non-word characters using regex
+def remove_special_characters(text):
+    return re.sub(r'[^\w\s]', '', text)
+
+# Register UDF
+remove_special_characters_udf = udf(remove_special_characters, StringType())
+
+# Apply UDF to remove non-word characters from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn('lowerReviewText', remove_special_characters_udf(col('lowerReviewText')))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Removing Stop Words
+
+# COMMAND ----------
+
+# Function to remove stopwords
+def remove_stopwords(text):
+    return " ".join(word for word in text.split() if word.lower() not in stop)
+
+# Register UDF
+remove_stopwords_udf = udf(remove_stopwords, StringType())
+
+# Apply UDF to remove stopwords from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn('finalReviewText', remove_stopwords_udf(col("lowerReviewText")))
+#df_cleaned_review.select('finalReviewText').show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Removing URLs
+
+# COMMAND ----------
+
+# Function to remove URLs using regex
+def remove_url(text):
+    url = re.compile(r'https?://\S+|www\.\S+')
+    return url.sub(r'', text)
+
+# Register UDF
+remove_url_udf = udf(remove_url, StringType())
+
+# Apply UDF to remove URLs from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn("finalReviewText", remove_url_udf(col("finalReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Remove html tags
+
+# COMMAND ----------
+
+# Function to remove HTML tags using regex
+def remove_html(text):
+    html = re.compile(r'<.*?>')
+    return html.sub(r'', text)
+
+# Register UDF
+remove_html_udf = udf(remove_html, StringType())
+
+# Apply UDF to remove HTML tags from the 'Text' column
+df_cleaned_review= df_cleaned_review.withColumn("finalReviewText", remove_html_udf(col("finalReviewText")))
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Removing emojis
+
+# COMMAND ----------
+
+# Function to remove emojis using regex
+def remove_emoji(text):
+    emoji_pattern = re.compile("["
+                               u"\U0001F600-\U0001F64F"  # emoticons
+                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                               u"\U0001F1E0-\U0001F1FF"  # flags
+                               u"\U00002702-\U000027B0"
+                               u"\U000024C2-\U0001F251"
+                               "]+", flags=re.UNICODE)
+    
+    return emoji_pattern.sub(r'', text)
+
+# Register UDF
+remove_emoji_udf = udf(remove_emoji, StringType())
+
+# Apply UDF to remove emojis from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn("finalReviewText", remove_emoji_udf(col("finalReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Removing emoticons
+
+# COMMAND ----------
+
+# Function to remove emoticons using regex
+def remove_emoticons(text):
+    emoticon_pattern = re.compile(r'(?::|;|=)(?:-)?(?:\)|\(|D|P)')
+    return emoticon_pattern.sub(r'', text)
+
+# Register UDF
+remove_emoticons_udf = udf(remove_emoticons, StringType())
+
+# Apply UDF to remove emoticons from the 'Text' column
+df_cleaned_review= df_cleaned_review.withColumn("finalReviewText", remove_emoticons_udf(col("finalReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Basic Feature Extraction - 2
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Number of Words 
+# MAGIC
+
+# COMMAND ----------
+
+# Calculate the length of the review text in words
+df_cleaned_review = df_cleaned_review.withColumn('review_length_words', size(split(col('reviewText'), ' ')))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Number of characters
+
+# COMMAND ----------
+
+df_cleaned_review=df_cleaned_review.withColumn('review_length_chars', F.length('reviewText'))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Average Word Length
+# MAGIC
+
+# COMMAND ----------
+
+# Function to calculate average word length
+def avg_word(sentence):
+    words = sentence.split()
+    return sum(len(word) for word in words) / (len(words) + 0.000001)
+
+# Register UDF
+avg_word_udf = udf(avg_word, FloatType())
+
+# Apply UDF to calculate the average word length for each text
+df_cleaned_review = df_cleaned_review.withColumn('avg_word', avg_word_udf(col('reviewText')))
+df_cleaned_review = df_cleaned_review.withColumn('avg_word', round(col('avg_word'), 1))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Month and year columns
+
+# COMMAND ----------
+
+# Create 'Month' and 'Year' columns from 'Date'
+df_cleaned_review = df_cleaned_review.withColumn("Month", month(col("unixReviewTime")))
+df_cleaned_review = df_cleaned_review.withColumn("Year", year(col("unixReviewTime")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ###### Columns to delete
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC we have several columns that we can omit for our analysis, for example, we do not need the column reviewerName since wealready have a reviewerID column that refers to the users
+
+# COMMAND ----------
+
+final_df=df_cleaned_review.drop("reviewerName")
+
+# COMMAND ----------
+
+display(final_df)
+
+# COMMAND ----------
+
+final_df.write \
+    .format("delta") \
+    .mode("append") \
+    .option("overwriteSchema", "true") \
+    .save("s3://1-factored-datathon-2023-lakehouse/Bronze/final_review2")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Amazon metadata
+
+# COMMAND ----------
+
+# Reading the data from the Gold schema
+df_metadata = spark.table("silver.amazon_metadata")
+display(df_metadata)
+
+# COMMAND ----------
+
+# how many unique products
+unique_product= df_metadata.select("asin").distinct().count()
+print("Number of unique products in the DataFrame of amazon metadata: ", unique_product)
+# how many unique brands 
+unique_brands = df_metadata.select("brand").distinct().count()
+print("Number of unique brands in the DataFrame of amazon metadata: ", unique_reviews)
+# how many unique categories
+unique_users = df_metadata.select("main_cat").distinct().count()
+print("Number of unique categories in the DataFrame of amazon metadata: ", unique_users)
+
+# COMMAND ----------
+
+total_rows_metadata = df_metadata.count()
+print("Number of rows in the DataFrame of amazon metadata: ", total_rows_metadata)
+
+# COMMAND ----------
+
+null_metadata=calculate_nulls(df_metadata)
+display(null_metadata)
+
+# COMMAND ----------
+
+
