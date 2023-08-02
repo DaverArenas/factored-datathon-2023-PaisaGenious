@@ -19,7 +19,7 @@ from pyspark.sql.functions import col, current_timestamp
 # MAGIC %sql
 # MAGIC --Note: tables are automatically created during .writeStream.table("reviews") operation, but we can also use plain SQL to create them
 # MAGIC USE Bronze;
-# MAGIC CREATE TABLE IF NOT EXISTS amazon_reviews(
+# MAGIC CREATE TABLE IF NOT EXISTS amazon_reviews_test(
 # MAGIC     asin                STRING NOT NULL,
 # MAGIC     image               STRING,
 # MAGIC     overall             STRING,
@@ -39,39 +39,11 @@ from pyspark.sql.functions import col, current_timestamp
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC CREATE TABLE IF NOT EXISTS bronze.amazon_metadata;
-# MAGIC ALTER TABLE bronze.amazon_metadata SET TBLPROPERTIES (
+# MAGIC CREATE TABLE IF NOT EXISTS bronze.amazon_metadata_test;
+# MAGIC ALTER TABLE bronze.amazon_metadata_test SET TBLPROPERTIES (
 # MAGIC    'delta.columnMapping.mode' = 'name',
 # MAGIC    'delta.minReaderVersion' = '2',
 # MAGIC    'delta.minWriterVersion' = '5')
-
-# COMMAND ----------
-
-# %sql
-# --Note: tables are automatically created during .writeStream.table("reviews") operation, but we can also use plain SQL to create them
-# USE Bronze;
-# CREATE TABLE IF NOT EXISTS amazon_metadata (
-#     also_buy              ARRAY<STRING>,
-#     also_view             ARRAY<STRING>,
-#     asin                  STRING NOT NULL,
-#     brand                 STRING,
-#     category              ARRAY<STRING>,
-#     date                  STRING,
-#     description           ARRAY<STRING>,
-#     details               STRING,
-#     feature               STRING,
-#     fit                   STRING,
-#     image                 STRING,
-#     main_cat              STRING,
-#     price                 STRING,
-#     rank                  STRING,
-#     similar_item          STRING,
-#     tech1                 STRING,
-#     tech2                 STRING,
-#     title                 STRING
-# ) using delta tblproperties (
-#     delta.autooptimize.optimizewrite = TRUE,
-#     delta.autooptimize.autocompact = TRUE);
 
 # COMMAND ----------
 
@@ -82,10 +54,10 @@ from pyspark.sql.functions import col, current_timestamp
 
 # Define the base path for S3 bucket
 s3_base_path = "s3://1-factored-datathon-2023-lakehouse"
-bronze_reviews = 'amazon_reviews'
-bronze_metadata = 'amazon_metadata'
-checkpoint_reviews = s3_base_path + '/Bronze/amazon_reviews/'
-checkpoint_metadata = s3_base_path + '/Bronze/amazon_metadata/'
+bronze_reviews = 'amazon_reviews_test'
+bronze_metadata = 'amazon_metadata_test'
+checkpoint_reviews = s3_base_path + '/Bronze/amazon_reviews_test/'
+checkpoint_metadata = s3_base_path + '/Bronze/amazon_metadata_test/'
 
 # COMMAND ----------
 
@@ -93,7 +65,7 @@ checkpoint_metadata = s3_base_path + '/Bronze/amazon_metadata/'
 bronze_amazon_reviews = spark.readStream \
                             .format("cloudFiles") \
                             .option("cloudFiles.format", "json") \
-                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_reviews/") \
+                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_reviews_test/") \
                             .option("cloudFiles.inferColumnTypes", True) \
                             .load("dbfs:/mnt/azure-data-lake/amazon_reviews/*/*.json") \
                             .select("*", col("_metadata.file_path").alias("source_file"), current_timestamp().alias("processing_time")) \
@@ -102,6 +74,8 @@ bronze_amazon_reviews = spark.readStream \
                             .option("mergeSchema", "true") \
                             .trigger(availableNow=True) \
                             .toTable(bronze_reviews)
+                            
+bronze_amazon_reviews.awaitTermination()
 
 # COMMAND ----------
 
@@ -109,7 +83,7 @@ bronze_amazon_reviews = spark.readStream \
 bronze_amazon_metadata = spark.readStream \
                             .format("cloudFiles") \
                             .option("cloudFiles.format", "json") \
-                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_metadata/") \
+                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_metadata_test/") \
                             .option("cloudFiles.inferColumnTypes", True) \
                             .load("dbfs:/mnt/azure-data-lake/amazon_metadata/*/*.json") \
                             .select("*", col("_metadata.file_path").alias("source_file"), current_timestamp().alias("processing_time")) \
@@ -118,3 +92,5 @@ bronze_amazon_metadata = spark.readStream \
                             .option("mergeSchema", "true") \
                             .trigger(availableNow=True) \
                             .toTable(bronze_metadata)
+
+bronze_amazon_metadata.awaitTermination()
