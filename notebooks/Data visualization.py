@@ -260,26 +260,46 @@ display(df.select("average_price","overall","main_cat","price"))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Brand 
-
-# COMMAND ----------
-
-display(df.select("average_price","overall","main_cat","sentiment","brand"))
-
-# COMMAND ----------
-
-display(df.select("brand").distinct())
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC #### Negative reviews analysis
 
 # COMMAND ----------
 
-
 negative_reviews_df = df.filter((F.col("overall") < 3))
-display(negative_reviews_df.select())
+display(negative_reviews_df.select("average_price","brand","main_cat","asin","title"))
+
+# COMMAND ----------
+
+count_brand=negative_reviews_df.groupBy("brand").count().orderBy(F.desc("count"))
+top_10_products_n = count_brand.limit(10)
+display(top_10_products_n)
+
+# COMMAND ----------
+
+count_title=negative_reviews_df.groupBy("title").count().orderBy(F.desc("count"))
+top_10_products_n = count_title.limit(10)
+display(top_10_products_n)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Positive reviews analysis
+
+# COMMAND ----------
+
+positive_reviews_df = df.filter((F.col("overall") > 3))
+display(positive_reviews_df.select("average_price","brand","main_cat","asin","title"))
+
+# COMMAND ----------
+
+count_brand_p=positive_reviews_df.groupBy("brand").count().orderBy(F.desc("count"))
+top_10_products_p = count_brand_p.limit(10)
+display(top_10_products_p)
+
+# COMMAND ----------
+
+count_title_p=positive_reviews_df.groupBy("title").count().orderBy(F.desc("count"))
+top_10_products_p= count_title_p.limit(10)
+display(top_10_products_p)
 
 # COMMAND ----------
 
