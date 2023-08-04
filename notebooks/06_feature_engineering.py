@@ -18,11 +18,16 @@ df = df.drop("Audio CD")
 
 new_column_names = [col.replace(":", "").replace(",", "").replace(";", "").replace(" ", "_") for col in df.columns]
 df = df.toDF(*new_column_names)
+df = df.drop("audio_cassette")
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC --drop table silver.metadata_details
+# MAGIC --drop table silver.metadata_details_test
+
+# COMMAND ----------
+
+df.columns
 
 # COMMAND ----------
 

@@ -104,4 +104,3 @@ The data engineering solution we implemented showcases a remarkable combination 
     </p>
 
 
-    Here we are, at the end of the doc

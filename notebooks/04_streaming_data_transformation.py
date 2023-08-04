@@ -6,7 +6,7 @@ from pyspark.sql.types import MapType, StringType, DecimalType
 
 # MAGIC %sql
 # MAGIC USE silver;
-# MAGIC CREATE TABLE IF NOT EXISTS amazon_reviews_stream(
+# MAGIC CREATE TABLE IF NOT EXISTS reviews_streaming(
 # MAGIC     asin                STRING NOT NULL,
 # MAGIC     image               STRING,
 # MAGIC     overall             Decimal(10,1),
@@ -26,13 +26,14 @@ from pyspark.sql.types import MapType, StringType, DecimalType
 
 # Define the base path for S3 bucket
 s3_base_path = "s3://1-factored-datathon-2023-lakehouse"
-silver_s_reviews = 'silver.amazon_reviews_stream'
-checkpoint_reviews_s_silver = s3_base_path + '/Silver/amazon_reviews_stream/'
+bronze_streaming = 'bronze.reviews_streaming'
+silver_streaming = 'silver.reviews_streaming'
+checkpointPath = s3_base_path + '/Silver/reviews_streaming/'
 
 # COMMAND ----------
 
-silver_amazon_s_reviews = spark.readStream \
-                            .table("Bronze.amazon_stream") \
+silver_reviews_streaming = spark.readStream \
+                            .table(bronze_streaming) \
                             .withColumn("overall", col("overall").cast(DecimalType(10, 1))) \
                             .withColumn("style", from_json(col("style"), MapType(StringType(), StringType()))) \
                             .withColumn("unixReviewTime", from_unixtime(col("unixReviewTime").cast("long")).cast("date")) \
@@ -42,19 +43,14 @@ silver_amazon_s_reviews = spark.readStream \
                             .drop(col("sequenceNumber")) \
                             .drop(col("enqueuedTime")) \
                         .writeStream \
-                            .option("checkpointLocation", checkpoint_reviews_s_silver) \
+                            .option("checkpointLocation", checkpointPath) \
                             .trigger(availableNow=True) \
-                            .toTable(silver_s_reviews)
-silver_amazon_s_reviews.awaitTermination()
+                            .toTable(silver_streaming)
+
+silver_reviews_streaming.awaitTermination(1 * 60 * 1000)
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC select count(*)
-# MAGIC from silver.amazon_reviews_stream
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC select count(*)
-# MAGIC from bronze.eh_stream
+# MAGIC from silver.reviews_streaming

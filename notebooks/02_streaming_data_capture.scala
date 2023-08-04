@@ -16,8 +16,8 @@ val consumerGroup = "paisa_genious" // Consumer group assigned to the team ("Pai
 val startingPosition = org.apache.spark.eventhubs.EventPosition.fromStartOfStream // Starting position for your streaming job
 val maxEventsPerTrigger = 20000
 
-val checkpointPath = "s3://1-factored-datathon-2023-lakehouse/Bronze/EH_Stream/"
-val bronze_streaming = "bronze.EH_Stream"
+val checkpointPath = "s3://1-factored-datathon-2023-lakehouse/Bronze/eh_streaming/"
+val bronze_streaming = "bronze.eh_streaming"
 
 // Set the consumer group and starting position
 eventHubsConf.setConsumerGroup(consumerGroup)
@@ -38,22 +38,29 @@ val query = df
 .toTable(bronze_streaming)
 
 // Start the structured streaming job.
-query.awaitTermination(5 * 60 * 1000)
+query.awaitTermination(1 * 60 * 1000)
+
+// COMMAND ----------
+
+val rowsInEH_Stream = spark.table("bronze.eh_streaming").count()
+if (rowsInEH_Stream >= 10000) {
+  query.stop()
+}
 
 // COMMAND ----------
 
 // MAGIC %sql
 // MAGIC select count(*)
-// MAGIC from bronze.EH_Stream
+// MAGIC from bronze.eh_streaming
 
 // COMMAND ----------
 
 // MAGIC %sql
 // MAGIC select count(distinct offset)
-// MAGIC from bronze.EH_Stream
+// MAGIC from bronze.eh_streaming
 
 // COMMAND ----------
 
 // MAGIC %sql
 // MAGIC select max(enqueuedTime)
-// MAGIC from bronze.EH_Stream
+// MAGIC from bronze.eh_streaming

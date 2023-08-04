@@ -1,8 +1,4 @@
 # Databricks notebook source
-!pip install nltk
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC #Data cleaning and feature extraction
 # MAGIC
@@ -25,8 +21,6 @@ import matplotlib.pyplot as plt
 #from nltk.tokenize import word_tokenize
 import re
 
-
-
 # COMMAND ----------
 
 # MAGIC %md
@@ -35,8 +29,8 @@ import re
 # COMMAND ----------
 
 # Reading the data from the Gold schema
-df_reviews = spark.table("silver.amazon_reviews")
-df_reviews_streaming=spark.table("silver.amazon_reviews_stream")
+df_reviews = spark.table("gold.reviews_details")
+#df_reviews_streaming=spark.table("silver.amazon_reviews_stream")
 
 # COMMAND ----------
 
@@ -207,6 +201,11 @@ new_dfrev=delete_nulls(df_no_duplicates)
 
 # COMMAND ----------
 
+new_dfrev=df_no_duplicates.select("asin","reviewText","overall","also_view","also_buy","main_cat","brand",
+                                  "title","verified","unixReviewTime","reviewerID","category","price","summary")
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC We are also going to impute the null values in the column reviewText with the information of the summary column, and if both columns are nulls then we are going to delete it 
 
@@ -219,7 +218,7 @@ df_imputed = new_dfrev.withColumn("reviewText", coalesce(col("reviewText"), col(
 df_cleaned_review = df_imputed.dropna(subset=["reviewText", "summary"])
 
 # Show the DataFrame after imputing and removing null rows
-null_reviews=calculate_nulls(df_cleaned_review)
+#null_reviews=calculate_nulls(df_cleaned_review)
 #display(null_reviews)
 
 # COMMAND ----------
@@ -228,7 +227,7 @@ df_cleaned_review.write \
     .format("delta") \
     .mode("append") \
     .option("overwriteSchema", "true") \
-    .save("s3://1-factored-datathon-2023-lakehouse/Bronze/final_review")
+    .save("s3://1-factored-datathon-2023-lakehouse/gold/review_cleaned")
 
 # COMMAND ----------
 
@@ -475,6 +474,10 @@ df_cleaned_review = df_cleaned_review.withColumn("Year", year(col("unixReviewTim
 
 # COMMAND ----------
 
+df_cleaned_review.show(10)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC we have several columns that we can omit for our analysis, for example, we do not need the column reviewerName since wealready have a reviewerID column that refers to the users
 
@@ -488,11 +491,11 @@ display(final_df)
 
 # COMMAND ----------
 
-final_df.write \
+df_cleaned_review.write \
     .format("delta") \
     .mode("append") \
     .option("overwriteSchema", "true") \
-    .save("s3://1-factored-datathon-2023-lakehouse/Bronze/final_review2")
+    .save("s3://1-factored-datathon-2023-lakehouse/gold/review_cleaned2")
 
 # COMMAND ----------
 
@@ -526,7 +529,3 @@ print("Number of rows in the DataFrame of amazon metadata: ", total_rows_metadat
 
 null_metadata=calculate_nulls(df_metadata)
 display(null_metadata)
-
-# COMMAND ----------
-
-
