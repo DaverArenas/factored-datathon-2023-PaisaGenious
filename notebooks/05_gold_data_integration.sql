@@ -1,4 +1,61 @@
 -- Databricks notebook source
+CREATE SCHEMA IF NOT EXISTS gold;
+
+CREATE TABLE IF NOT EXISTS gold.amazon_reviews
+USING DELTA
+AS
+SELECT * FROM silver.amazon_reviews
+UNION ALL
+SELECT * FROM silver.reviews_streaming;
+
+-- COMMAND ----------
+
+CREATE TABLE gold.reviews_details;
+ALTER TABLE gold.reviews_details SET TBLPROPERTIES (
+   'delta.columnMapping.mode' = 'name',
+   'delta.minReaderVersion' = '2',
+   'delta.minWriterVersion' = '5')
+
+-- COMMAND ----------
+
+-- MAGIC %python
+-- MAGIC spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+
+-- COMMAND ----------
+
+select count(*)
+from gold.amazon_reviews
+
+-- COMMAND ----------
+
+INSERT INTO gold.reviews_details
+SELECT 
+r.*, m.also_buy, m.also_view, m.brand, m.category, m.date, m.description, m.details, m.feature, m.main_cat, m.price, m.rank as rank_, m.similar_item, m.title
+FROM gold.amazon_reviews AS r
+LEFT JOIN silver.amazon_metadata AS m
+ON r.asin = m.asin;
+
+-- COMMAND ----------
+
+select*
+from gold.reviews_details
+limit 10
+
+-- COMMAND ----------
+
+SELECT COUNT(DISTINCT reviewerID)
+from gold.reviews_details
+
+-- COMMAND ----------
+
+COPY INTO gold.amazon_reviews
+FROM silver.reviews_streaming
+FILEFORMAT = <format>
+FORMAT_OPTIONS ('mergeSchema' = 'true')
+COPY_OPTIONS ('mergeSchema' = 'true');
+
+-- COMMAND ----------
+
 select*
 from silver.amazon_reviews
 limit 10

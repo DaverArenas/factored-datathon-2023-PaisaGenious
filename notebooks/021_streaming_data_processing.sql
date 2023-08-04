@@ -1,6 +1,6 @@
 -- Databricks notebook source
 USE bronze;
-CREATE TABLE IF NOT EXISTS amazon_stream(
+CREATE TABLE IF NOT EXISTS reviews_streaming(
     asin                STRING NOT NULL,
     image               STRING,
     overall             STRING,
@@ -23,7 +23,7 @@ USING DELTA;
 -- MAGIC %sql
 -- MAGIC CREATE OR REPLACE TEMP VIEW events_strings AS 
 -- MAGIC SELECT string(body), offset, sequenceNumber, enqueuedTime  
--- MAGIC FROM bronze.EH_Stream;
+-- MAGIC FROM bronze.eh_streaming;
 -- MAGIC
 -- MAGIC CREATE OR REPLACE TEMP VIEW parsed_events 
 -- MAGIC AS 
@@ -34,7 +34,7 @@ USING DELTA;
 
 -- COMMAND ----------
 
-MERGE INTO bronze.amazon_stream a
+MERGE INTO bronze.reviews_streaming a
 USING parsed_events e
 ON a.offset = e.offset
 WHEN NOT MATCHED THEN INSERT *
@@ -42,4 +42,4 @@ WHEN NOT MATCHED THEN INSERT *
 -- COMMAND ----------
 
 select count(*)
-from bronze.amazon_stream
+from bronze.reviews_streaming
