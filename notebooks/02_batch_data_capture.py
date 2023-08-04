@@ -19,7 +19,7 @@ from pyspark.sql.functions import col, current_timestamp
 # MAGIC %sql
 # MAGIC --Note: tables are automatically created during .writeStream.table("reviews") operation, but we can also use plain SQL to create them
 # MAGIC USE Bronze;
-# MAGIC CREATE TABLE IF NOT EXISTS amazon_reviews_test(
+# MAGIC CREATE TABLE IF NOT EXISTS amazon_reviews(
 # MAGIC     asin                STRING NOT NULL,
 # MAGIC     image               STRING,
 # MAGIC     overall             STRING,
@@ -39,8 +39,8 @@ from pyspark.sql.functions import col, current_timestamp
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC CREATE TABLE IF NOT EXISTS bronze.amazon_metadata_test;
-# MAGIC ALTER TABLE bronze.amazon_metadata_test SET TBLPROPERTIES (
+# MAGIC CREATE TABLE IF NOT EXISTS bronze.amazon_metadata;
+# MAGIC ALTER TABLE bronze.amazon_metadata SET TBLPROPERTIES (
 # MAGIC    'delta.columnMapping.mode' = 'name',
 # MAGIC    'delta.minReaderVersion' = '2',
 # MAGIC    'delta.minWriterVersion' = '5')
@@ -54,10 +54,10 @@ from pyspark.sql.functions import col, current_timestamp
 
 # Define the base path for S3 bucket
 s3_base_path = "s3://1-factored-datathon-2023-lakehouse"
-bronze_reviews = 'amazon_reviews_test'
-bronze_metadata = 'amazon_metadata_test'
-checkpoint_reviews = s3_base_path + '/Bronze/amazon_reviews_test/'
-checkpoint_metadata = s3_base_path + '/Bronze/amazon_metadata_test/'
+bronze_reviews = 'amazon_reviews'
+bronze_metadata = 'amazon_metadata'
+checkpoint_reviews = s3_base_path + '/Bronze/amazon_reviews/'
+checkpoint_metadata = s3_base_path + '/Bronze/amazon_metadata/'
 
 # COMMAND ----------
 
@@ -65,7 +65,7 @@ checkpoint_metadata = s3_base_path + '/Bronze/amazon_metadata_test/'
 bronze_amazon_reviews = spark.readStream \
                             .format("cloudFiles") \
                             .option("cloudFiles.format", "json") \
-                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_reviews_test/") \
+                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_reviews/") \
                             .option("cloudFiles.inferColumnTypes", True) \
                             .load("dbfs:/mnt/azure-data-lake/amazon_reviews/*/*.json") \
                             .select("*", col("_metadata.file_path").alias("source_file"), current_timestamp().alias("processing_time")) \
@@ -83,7 +83,7 @@ bronze_amazon_reviews.awaitTermination()
 bronze_amazon_metadata = spark.readStream \
                             .format("cloudFiles") \
                             .option("cloudFiles.format", "json") \
-                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_metadata_test/") \
+                            .option("cloudFiles.schemaLocation", s3_base_path+"/schemas/amazon_metadata/") \
                             .option("cloudFiles.inferColumnTypes", True) \
                             .load("dbfs:/mnt/azure-data-lake/amazon_metadata/*/*.json") \
                             .select("*", col("_metadata.file_path").alias("source_file"), current_timestamp().alias("processing_time")) \
