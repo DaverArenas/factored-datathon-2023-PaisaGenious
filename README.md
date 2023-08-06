@@ -102,6 +102,19 @@ The data engineering solution we implemented showcases a remarkable combination 
       <img src="overview/pipeline_run_streaming.jpg" alt="Alt Text" style="margin-left: 50px;">
     </p>
 
+- ### ***Gold Layer: Business level Aggregates***
+
+    - **Pipeline from Silver to Gold**
+
+      In this section, we will discuss the data engineering pipeline responsible for transforming Amazon reviews data from both batch and streaming sources into the Gold layer, where we focus on generating business-level aggregates for analytics and machine learning purposes. The initial step of the pipeline involves joining data from both batch and streaming sources, this unified dataset serves as the foundation for subsequent transformations and analyses. Following the data integration step, we transform string-based product prices into integer values to obtain the actual price of products. Additionally, we perform imputation of missing price categories using the mean value from existing data. We also address data quality by removing any HTML tags present in columns such as main category, brand, and titles. Furthermore, we apply general text processing strategies to handle any other missing or incomplete data, ensuring a thorough data cleansing process.
+      
+      The Gold layer aims to deliver continuously updated, clean data to downstream users and applications, including machine learning models, ad-hoc queries, and analytics tools.
+
+      By implementing these transformations and data cleansing strategies, we ensure that the Gold layer provides accurate and reliable business-level aggregates, facilitating valuable insights for various stakeholders within the organization. This unified dataset, derived from both batch and streaming sources, serves as a powerful resource for analytics and machine learning purposes, empowering data-driven decision-making and driving the organization's success.
+
+      <p align="center">
+        <img src="overview/gold-layer.png" alt="Alt Text" style="margin-left: 50px;">
+      </p>
 
 ## 5. **Data Science: Machine learning models**
 
