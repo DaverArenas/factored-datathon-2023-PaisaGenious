@@ -82,11 +82,6 @@ print("Number of unique users in the DataFrame of amazon reviews streaming: ", u
 
 # COMMAND ----------
 
-# Perform vertical concatenation (union) using the union method
-df_reviews_final = df_reviews.union(df_reviews_streaming)
-
-# COMMAND ----------
-
 # how many unique products
 unique_product= df_reviews_final.select("asin").distinct().count()
 print("Number of unique products in the DataFrame of amazon reviews streaming: ", unique_product)
@@ -237,188 +232,6 @@ df_cleaned_review.write \
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ######1. Number of stopwords
-
-# COMMAND ----------
-
-nltk.download('stopwords')
-stop = stopwords.words('english')
-
-def remove_stopwords(text):
-    return len([word for word in text.split() if word.lower() not in stop])
-
-remove_stopwords_udf = udf(remove_stopwords, IntegerType())
-
-df_cleaned_review= df_cleaned_review.withColumn('stopwords', remove_stopwords_udf(col('reviewText')))
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ######2. Number of Punctuation
-
-# COMMAND ----------
-
-# Function to count punctuation
-def count_punct(text):
-    return sum(1 for char in text if char in string.punctuation)
-
-# Register UDF
-count_punct_udf = udf(count_punct, IntegerType())
-
-# Apply UDF to calculate the number of punctuation marks in each text
-df_cleaned_review = df_cleaned_review.withColumn('punctuation', count_punct_udf(col('reviewText')))
-#display(df_cleaned_review.select("reviewText","punctuation","stopwords"))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###Text cleaning techniques
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Make all text lower case
-# MAGIC
-# MAGIC The first pre-processing step which we will do is transform our reviews into lower case. This avoids having multiple copies of the same words. For example, while calculating the word count, ‘Analytics’ and ‘analytics’ will be taken as different words
-
-# COMMAND ----------
-
-# Function to convert text to lowercase and join
-def lowercase_and_join(text):
-    return " ".join(word.lower() for word in text.split())
-
-# Register UDF
-lowercase_and_join_udf = udf(lowercase_and_join, StringType())
-
-# Apply UDF to convert the text to lowercase and join it back
-df_cleaned_review= df_cleaned_review.withColumn('lowerReviewText', lowercase_and_join_udf(col('reviewText')))
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Removing punctuation
-
-# COMMAND ----------
-
-# Function to remove non-word characters using regex
-def remove_special_characters(text):
-    return re.sub(r'[^\w\s]', '', text)
-
-# Register UDF
-remove_special_characters_udf = udf(remove_special_characters, StringType())
-
-# Apply UDF to remove non-word characters from the 'Text' column
-df_cleaned_review = df_cleaned_review.withColumn('lowerReviewText', remove_special_characters_udf(col('lowerReviewText')))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Removing Stop Words
-
-# COMMAND ----------
-
-# Function to remove stopwords
-def remove_stopwords(text):
-    return " ".join(word for word in text.split() if word.lower() not in stop)
-
-# Register UDF
-remove_stopwords_udf = udf(remove_stopwords, StringType())
-
-# Apply UDF to remove stopwords from the 'Text' column
-df_cleaned_review = df_cleaned_review.withColumn('finalReviewText', remove_stopwords_udf(col("lowerReviewText")))
-#df_cleaned_review.select('finalReviewText').show()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Removing URLs
-
-# COMMAND ----------
-
-# Function to remove URLs using regex
-def remove_url(text):
-    url = re.compile(r'https?://\S+|www\.\S+')
-    return url.sub(r'', text)
-
-# Register UDF
-remove_url_udf = udf(remove_url, StringType())
-
-# Apply UDF to remove URLs from the 'Text' column
-df_cleaned_review = df_cleaned_review.withColumn("finalReviewText", remove_url_udf(col("finalReviewText")))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Remove html tags
-
-# COMMAND ----------
-
-# Function to remove HTML tags using regex
-def remove_html(text):
-    html = re.compile(r'<.*?>')
-    return html.sub(r'', text)
-
-# Register UDF
-remove_html_udf = udf(remove_html, StringType())
-
-# Apply UDF to remove HTML tags from the 'Text' column
-df_cleaned_review= df_cleaned_review.withColumn("finalReviewText", remove_html_udf(col("finalReviewText")))
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Removing emojis
-
-# COMMAND ----------
-
-# Function to remove emojis using regex
-def remove_emoji(text):
-    emoji_pattern = re.compile("["
-                               u"\U0001F600-\U0001F64F"  # emoticons
-                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
-                               u"\U0001F1E0-\U0001F1FF"  # flags
-                               u"\U00002702-\U000027B0"
-                               u"\U000024C2-\U0001F251"
-                               "]+", flags=re.UNICODE)
-    
-    return emoji_pattern.sub(r'', text)
-
-# Register UDF
-remove_emoji_udf = udf(remove_emoji, StringType())
-
-# Apply UDF to remove emojis from the 'Text' column
-df_cleaned_review = df_cleaned_review.withColumn("finalReviewText", remove_emoji_udf(col("finalReviewText")))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ###### Removing emoticons
-
-# COMMAND ----------
-
-# Function to remove emoticons using regex
-def remove_emoticons(text):
-    emoticon_pattern = re.compile(r'(?::|;|=)(?:-)?(?:\)|\(|D|P)')
-    return emoticon_pattern.sub(r'', text)
-
-# Register UDF
-remove_emoticons_udf = udf(remove_emoticons, StringType())
-
-# Apply UDF to remove emoticons from the 'Text' column
-df_cleaned_review= df_cleaned_review.withColumn("finalReviewText", remove_emoticons_udf(col("finalReviewText")))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Basic Feature Extraction - 2
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ###### Number of Words 
 # MAGIC
 
@@ -469,28 +282,6 @@ df_cleaned_review = df_cleaned_review.withColumn("Year", year(col("unixReviewTim
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ###### Columns to delete
-
-# COMMAND ----------
-
-df_cleaned_review.show(10)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC we have several columns that we can omit for our analysis, for example, we do not need the column reviewerName since wealready have a reviewerID column that refers to the users
-
-# COMMAND ----------
-
-final_df=df_cleaned_review.drop("reviewerName")
-
-# COMMAND ----------
-
-display(final_df)
-
-# COMMAND ----------
-
 df_cleaned_review.write \
     .format("delta") \
     .mode("append") \
@@ -527,5 +318,111 @@ print("Number of rows in the DataFrame of amazon metadata: ", total_rows_metadat
 
 # COMMAND ----------
 
-null_metadata=calculate_nulls(df_metadata)
-display(null_metadata)
+# MAGIC %md 
+# MAGIC #### Data imputation - main_cat
+
+# COMMAND ----------
+
+def unescape_html(text):
+    if text is not None:
+        return html.unescape(text)
+
+unescape_udf = udf(unescape_html, StringType())
+
+new_df = union_df.withColumn("main_cat", when(col("main_cat").isNull(), "undefined").otherwise(unescape_udf(col("main_cat"))))
+#new_df= union_df.withColumn("main_cat", unescape_udf(col("main_cat")))
+
+new_df = new_df.withColumn("extracted_cat", when(col("main_cat")\
+    .like('<img src=%'), regexp_extract(col("main_cat"), 'alt="([^"]+)"', 1)).otherwise(col("main_cat")))
+
+new_df = new_df.withColumn("extracted_cat",F.when(F.col("extracted_cat")=="undefined", F.col('category').getItem(0))\
+    .otherwise(F.col("extracted_cat")))
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC #### Data imputation - price
+
+# COMMAND ----------
+
+# Define a function to calculate the average price
+def calculate_average_price(price):
+
+    if price is not None:
+        # Regular expression to match price ranges
+        range_pattern = r"\$(\d+(?:\.\d+)?)\s*-\s*\$(\d+(?:\.\d+)?)"
+        if "-" in price:
+            range_match = re.match(range_pattern, price)
+            if range_match:
+                try:
+                    min_price = float(range_match.group(1))
+                    max_price = float(range_match.group(2))
+                    avg_price = (min_price + max_price) / 2
+                    return avg_price
+                except (ValueError, IndexError):
+                    return None
+        elif "$" in price:
+            try:
+                return float(price.strip('$'))
+            except ValueError:
+                return None
+        
+        elif price=="":
+            return None
+    
+# Register the function as a UDF (User-Defined Function)
+calculate_avg_price_udf = F.udf(calculate_average_price, FloatType())
+
+# Create a new column "average_price" using the UDF to calculate the average price
+#df =new_df.withColumn("average_price", when(col("price").isNull(), 0).otherwise(calculate_avg_price_udf(F.col("price"))))
+df = new_df.withColumn("average_price", calculate_avg_price_udf(F.col("price")))
+
+# COMMAND ----------
+
+# Step 1: Calculate the mean for each "main_cat" category
+mean_df = df.groupBy("main_cat").agg(F.round(F.avg("average_price"),2).alias("mean_price"))
+
+# Step 2: Join the original DataFrame with the mean DataFrame to get the mean_price for each main_cat
+df = df.join(mean_df, on="main_cat", how="left")
+
+# Step 3: Replace null values in "average_price" column with the corresponding mean_price
+df = df.withColumn("average_price", F.when(F.col("average_price").isNull(), F.col("mean_price"))
+    .otherwise((F.col("average_price"))))
+
+#mean_value_total = df.selectExpr("mean(average_price)").collect()[0][0]
+
+# Paso 4: impute the rest of null values with the total average 
+#df = df.withColumn("average_price", col("average_price").fillna(mean_value_total))
+
+# Step 5: Drop the "mean_price" column, as it's no longer needed
+df = df.drop("mean_price")
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### impute column brand
+
+# COMMAND ----------
+
+# Use when to replace null, empty strings, and "unknown" values with a default value (e.g., "NA")
+df= df.withColumn("brand",when((col("brand").isNull()) | (col("brand") == "") | (col("brand") == "Unknown"), "Unknown")
+                                  .otherwise(col("brand")))
+
+# Use concat_ws to concatenate the values into a single column
+#df= df.withColumn("brand", concat_ws(", ", col("brand")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Column title - format
+
+# COMMAND ----------
+
+pattern = r'^<span.*?>(.*?)</span>'
+df=df.withColumn("title", when(col("title")\
+    .like('<span id=%'), regexp_extract(col("title"), pattern, 1)).otherwise(col("title")))
+
+df= df.withColumn("title",when((col("title").isNull()) | (col("title") == "") , "Unknown")
+                                  .otherwise(col("title")))
+#df = df.withColumn("title", regexp_extract(col("title"), pattern, 1))

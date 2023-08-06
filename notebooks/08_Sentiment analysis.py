@@ -15,8 +15,9 @@
 # Import necessary libraries
 from pyspark.sql.functions import udf
 from pyspark.sql.types import StringType
-from pyspark.sql.functions import lower,col,regexp_replace,when,rand
+from pyspark.sql.functions import lower,col,regexp_replace,when,rand,year,from_unixtime,unix_timestamp,length
 from pyspark.sql import functions as F
+from html import unescape
 
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
 from pyspark.ml.feature import VectorAssembler
@@ -30,10 +31,16 @@ from nltk.corpus import stopwords
 import nltk
 from pyspark.ml.feature import StopWordsRemover
 import mlflow
-#from textblob import TextBlob
+from textblob import TextBlob
 
 from pyspark.sql.functions import udf, col, size
-from pyspark.sql.types import ArrayType, StringType
+from pyspark.sql.types import ArrayType, StringType,FloatType,DoubleType
+
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import BinaryClassificationEvaluator,MulticlassClassificationEvaluator
+from pyspark.mllib.evaluation import BinaryClassificationMetrics
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+from pyspark.ml import Pipeline
 
 # COMMAND ----------
 
@@ -43,11 +50,179 @@ from pyspark.sql.types import ArrayType, StringType
 # COMMAND ----------
 
 # Read the data from the Gold schema
-reviews_df = spark.table("silver.amazon_reviews")
+reviews_df = spark.table("gold.amazon_reviews_")
 
 # COMMAND ----------
 
-df_reviews = spark.read.format("delta").load("s3://1-factored-datathon-2023-lakehouse/Bronze/review_cleaned")
+reviews_df=reviews_df.select("reviewText","Year","overall")
+reviews_df=reviews_df.filter(col("Year")>2016)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Data processsing
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Removing special characters
+
+# COMMAND ----------
+
+# Function to remove non-word characters using regex
+def remove_special_characters(text):
+    return re.sub(r'[^\w\s]', '', text)
+
+# Register UDF
+remove_special_characters_udf = udf(remove_special_characters, StringType())
+
+# Apply UDF to remove non-word characters from the 'Text' column
+df_cleaned_review = reviews_df.withColumn('cleanedReviewText', remove_special_characters_udf(col('reviewText')))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Removing html tags
+
+# COMMAND ----------
+
+# Function to remove HTML tags using regex
+def remove_html(text):
+    cleanr = re.compile('<.*?>')
+    cleanr2 = re.compile('<.*?</a>')
+    textm=re.sub(cleanr2, '', text)
+    textf=re.sub(cleanr, '', textm)
+    return textf
+
+# Register UDF
+remove_html_udf = udf(remove_html, StringType())
+
+# Apply UDF to remove HTML tags from the 'Text' column
+df_cleaned_review= df_cleaned_review.withColumn("cleanedReviewText", remove_html_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Lowercase
+# MAGIC
+
+# COMMAND ----------
+
+# Function to convert text to lowercase and join
+def lowercase_and_join(text):
+    return " ".join(word.lower() for word in text.split())
+
+# Register UDF
+lowercase_and_join_udf = udf(lowercase_and_join, StringType())
+
+# Apply UDF to convert the text to lowercase and join it back
+df_cleaned_review= df_cleaned_review.withColumn('cleanedReviewText', lowercase_and_join_udf(col('cleanedReviewText')))
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Removing URLs
+
+# COMMAND ----------
+
+# Function to remove URLs using regex
+def remove_url(text):
+    url = re.compile(r'https?://\S+|www\.\S+')
+    return url.sub(r'', text)
+
+# Register UDF
+remove_url_udf = udf(remove_url, StringType())
+
+# Apply UDF to remove URLs from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn("cleanedReviewText", remove_url_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Removing emojis
+
+# COMMAND ----------
+
+# Function to remove emojis using regex
+def remove_emoji(text):
+    emoji_pattern = re.compile("["
+                               u"\U0001F600-\U0001F64F"  # emoticons
+                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                               u"\U0001F1E0-\U0001F1FF"  # flags
+                               u"\U00002702-\U000027B0"
+                               u"\U000024C2-\U0001F251"
+                               "]+", flags=re.UNICODE)
+    
+    return emoji_pattern.sub(r'', text)
+
+# Register UDF
+remove_emoji_udf = udf(remove_emoji, StringType())
+
+# Apply UDF to remove emojis from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn("cleanedReviewText", remove_emoji_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Removing emoticons
+
+# COMMAND ----------
+
+def remove_emoticons(text):
+    emoticon_pattern = re.compile(r'(?::|;|=)(?:-)?(?:\)|\(|D|P)')
+    return emoticon_pattern.sub(r'', text)
+
+# Register UDF
+remove_emoticons_udf = udf(remove_emoticons, StringType())
+
+# Apply UDF to remove emoticons from the 'Text' column
+df_cleaned_review= df_cleaned_review.withColumn("cleanedReviewText", remove_emoticons_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Removing numerical characters
+
+# COMMAND ----------
+
+# Use regexp_replace to remove numerical characters from the 'text_column'
+df_cleaned_review= df_cleaned_review.withColumn("cleanedReviewText",regexp_replace(col("cleanedReviewText"), r'\d+', ''))
+# Remove rows with cleanedReviewText as "" or with less than 4 characters
+df_cleaned_review = df_cleaned_review.filter((length(col("cleanedReviewText")) >= 4) & (col("cleanedReviewText") != ""))
+#df=df_cleaned_review.select("cleanedReviewText","label")
+df=df_cleaned_review.select("cleanedReviewText","overall")
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Labeling the data
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Approach 1 - Based on "Overall":
+
+# COMMAND ----------
+
+# Add a new column "sentiment_label" based on sentiment polarity
+df = df_cleaned_review.withColumn("label1", when(col("overall") < 3.0, 0)
+                                   .when(col("overall") == 3.0, 0)
+                                   .when(col("overall") > 3.0, 1))
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Approach 2 - Polarity Calculation":
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Calculating polarity
 
 # COMMAND ----------
 
@@ -57,85 +232,33 @@ def get_sentiment(review):
         return TextBlob(review).sentiment.polarity
     else:
         return 0.0  # Assign a neutral polarity for missing or non-string reviews
+    
+# Register the UDF with Spark
+sentiment_udf = udf(get_sentiment, FloatType())
 
+# Assume 'df' is your Spark DataFrame with a column named 'review' containing the text reviews
+# Add a new column 'sentiment' with the calculated sentiment using the UDF
+df = df.withColumn("polarity", sentiment_udf(df["cleanedReviewText"]))
 
 # COMMAND ----------
 
 # Add a new column "sentiment_label" based on sentiment polarity
-reviews_df = df_reviews.withColumn("label", 
-                                   when(col("overall") < 3.0, 0)
-                                   .when(col("overall") == 3.0, 0)
-                                   .when(col("overall") > 3.0, 1))
+df = df.withColumn("label", when((col("polarity") < 0.0) | (col("polarity") == 0.0), 0).when(col("polarity") > 0.0, 1))
+
 
 # COMMAND ----------
 
-reviews_df.groupBy('label').count().show()
+df1=df.select("label1","cleanedReviewText")
+display(df1.groupBy("label1").count())
 
 # COMMAND ----------
 
-reviews_df=reviews_df.select("reviewText","label")
+df2=df.select("label","cleanedReviewText")
+display(df.groupBy("label").count())
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC #### Data processsing
-
-# COMMAND ----------
-
-# Define preprocessing function
-def clean(text):
-    import html
-    import string
-    import nltk
-    nltk.download('wordnet')
-    nltk.download('omw-1.4')
-
-    line = html.unescape(text)
-    line = line.replace("can't", 'can not')
-    line = line.replace("n't", " not")
-    # Pad punctuations with white spaces
-    pad_punct = str.maketrans({key: " {0} ".format(key) for key in string.punctuation}) 
-    line = line.translate(pad_punct)
-    line = line.lower()
-    line = line.split() 
-    lemmatizer = nltk.WordNetLemmatizer()
-    line = [lemmatizer.lemmatize(t) for t in line] 
-
-    # Negation handling
-    # Add "not_" prefix to words behind "not", or "no" until the end of the sentence
-    tokens = []
-    negated = False
-    for t in line:
-        if t in ['not', 'no']:
-            negated = not negated
-        elif t in string.punctuation or not t.isalpha():
-            negated = False
-        else:
-            tokens.append('not_' + t if negated else t)
-    
-    invalidChars = str(string.punctuation.replace("_", ""))  
-    bi_tokens = list(nltk.bigrams(line))
-    bi_tokens = list(map('_'.join, bi_tokens))
-    bi_tokens = [i for i in bi_tokens if all(j not in invalidChars for j in i)]
-    tri_tokens = list(nltk.trigrams(line))
-    tri_tokens = list(map('_'.join, tri_tokens))
-    tri_tokens = [i for i in tri_tokens if all(j not in invalidChars for j in i)]
-    tokens = tokens + bi_tokens + tri_tokens      
-    
-    return tokens
-
-# COMMAND ----------
-
-# An example: how the function clean() pre-processes the input text
-example = clean("I don't think this book has any decent information!!! It is full of typos and factual errors that I can't ignore.")
-print(example)
-
-# COMMAND ----------
-
-# Perform data preprocessing
-clean_udf = udf(clean, ArrayType(StringType()))
-data_tokens = reviews_df.withColumn('tokens', clean_udf(col('reviewText')))
-#data=data_tokens.select("reviewText","tokens","label")
+df=df2
 
 # COMMAND ----------
 
@@ -145,14 +268,14 @@ data_tokens = reviews_df.withColumn('tokens', clean_udf(col('reviewText')))
 # COMMAND ----------
 
 # Get the counts of each class
-class_counts =data_tokens.groupBy("label").count()
+class_counts =df.groupBy("label").count()
 
 # Calculate the smallest class count (minimum count)
 min_class_count = class_counts.agg({"count": "min"}).collect()[0][0]
 
 # Randomly undersample the majority class and medium class
-undersampled_df = data_tokens.filter(col("label") != 1)  # Keep all non-majority class samples
-majority_class_df = data_tokens.filter(col("label") == 1)  # Get all majority class samples
+undersampled_df = df.filter(col("label") != 1)  # Keep all non-majority class samples
+majority_class_df = df.filter(col("label") == 1)  # Get all majority class samples
 
 # Undersample the majority class
 undersampled_majority_class_df = majority_class_df.sample(False, min_class_count / majority_class_df.count())
@@ -162,21 +285,29 @@ balanced_df = undersampled_df.union(undersampled_majority_class_df)
 
 # COMMAND ----------
 
-wordsDF=balanced_df.select("reviewText","label","tokens")
-df=balanced_df.select("reviewText","label")
-#wordsDF.groupBy("label").count().show()
+df=balanced_df
+df.groupBy("label").count().show()
+
+# COMMAND ----------
+
+display(df)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Feature extraction: Term Frequency (TF) Vectors:
 
 # COMMAND ----------
 
 # Tokenize the review. 
-tokenizer = Tokenizer(inputCol="reviewText", outputCol="review_words")
-wordsDFp = tokenizer.transform(df)
-wordsDF#.show(2)
+tokenizer = Tokenizer(inputCol="cleanedReviewText", outputCol="review_words")
+wordsDF = tokenizer.transform(df)
+#wordsDF.show(2)
 
 # COMMAND ----------
 
 # Remove stop words
-remover = StopWordsRemover(inputCol="tokens", outputCol="filtered")
+remover = StopWordsRemover(inputCol="review_words", outputCol="filtered")
 wordsDF2 = remover.transform(wordsDF)
 #wordsDF2.show(10)
 
@@ -185,19 +316,12 @@ wordsDF2 = remover.transform(wordsDF)
 # Convert to TF words vector
 hashingTF = HashingTF(inputCol="filtered", outputCol="TF")
 wordsDF3 = hashingTF.transform(wordsDF2)
-wordsDF3.show(2)
-
-# COMMAND ----------
-
-# Convert to TF words vector
-hashingTF = HashingTF(inputCol="filtered", outputCol="TF")
-wordsDF3 = hashingTF.transform(wordsDF2)
-wordsDF3.show(2)
+#wordsDF3.show(2)
 
 # COMMAND ----------
 
 ## HashingTF in SparkML cannot normalize term frequency with the total number of words in each document
-for features_label in wordsDF3.select("TF", "label").take(1):
+for features_label in wordsDF3.select("TF", "label").take(3):
     print(features_label)
 
 # COMMAND ----------
@@ -205,33 +329,105 @@ for features_label in wordsDF3.select("TF", "label").take(1):
 # Convert to IDF words vector, ensure to name the features as 'features'
 idf = IDF(inputCol="TF", outputCol="features")
 idfModel = idf.fit(wordsDF3)
-#wordsDF4 = idfModel.transform(wordsDF3)
+wordsDF4 = idfModel.transform(wordsDF3)
 #wordsDF4.show(10)
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### Model training
 
+# COMMAND ----------
+
+# Split data into training and testing set 
+(training, test) = df.randomSplit([0.8, 0.2])
+
+# Create a logistic regression instance
+lr = LogisticRegression()
+
+# Use a pipeline to chain all transformers and estimators
+pipeline = Pipeline(stages=[tokenizer,remover, hashingTF, idfModel, lr])
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Model training
+# MAGIC #### Grid search and cross validation
 
 # COMMAND ----------
 
-from pyspark.ml.classification import LogisticRegression
-from pyspark.ml.evaluation import BinaryClassificationEvaluator,MulticlassClassificationEvaluator
-from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
-from pyspark.ml import Pipeline
+# Create ParamGrid for Cross Validation 
+paramGrid2 = (ParamGridBuilder()
+             .addGrid(hashingTF.numFeatures, [50000])
+             .addGrid(lr.regParam, [0.10])
+             .addGrid(lr.elasticNetParam, [0.10])
+             .addGrid(lr.maxIter, [10])
+             .build())
 
-# Split data into training and testing set 
-(training, test) = df.randomSplit([0.7, 0.3])
+evaluator2 = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction2", metricName="accuracy")
+crossval2 = CrossValidator(estimator=pipeline,
+                            estimatorParamMaps=paramGrid2,
+                            evaluator=evaluator,
+                            numFolds=3)
 
-# Create a logistic regression instance
-lr = LogisticRegression(maxIter=10)
 
-# Use a pipeline to chain all transformers and estimators
-pipeline = Pipeline(stages=[remover, hashingTF, idfModel, lr])
+# COMMAND ----------
+
+cvModel2 = crossval2.fit(training)
+# Run cross-validation, and choose the best set of parameters.
+# Get best model from cross-validator
+bestModel = cvModel2.bestModel
+prediction2 = cvModel2.transform(test)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Evaluation and results
+
+# COMMAND ----------
+
+def show_results(model,pred):
+    from sklearn.metrics import classification_report
+    ########  Make predictions on on the test data
+    average_score = cvModel.avgMetrics
+    print ('average cross-validation accuracy = {}'.format(average_score[0]))
+    ######## Calculate accuracy of the prediction of the test data
+    evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="accuracy")
+    accuracy_score=evaluator.evaluate(prediction)
+    # another way to calculate accuracy 
+    #correct=prediction.filter(prediction['label']== prediction['prediction2']).select("label","prediction2")
+    #accuracy_score = correct.count() / float(test.count())  
+    print ('Accuracy in the test data = {}'.format(accuracy_score))
+    
+    ######## calculate F1 score of the prediction of the test data
+    evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
+    f1_score=evaluator.evaluate(prediction)
+    print ('F1 score in the test data = {}'.format(f1_score))
+    # Calculate area under ROC for the prediction of the test data
+    evaluator = BinaryClassificationEvaluator(labelCol="label", metricName="areaUnderROC")
+    ROC_score=evaluator.evaluate(prediction)
+    print ('areaUnderROC in the test data = {}'.format(ROC_score))
+    
+    ######## Print classification_report
+    prediction_and_labels=prediction.select("label","prediction")
+    y_true = []
+    y_pred = []
+    for x in prediction_and_labels.collect():
+        xx = list(x)
+        try:
+            tt = int(xx[1])
+            pp = int(xx[0])
+            y_true.append(tt)
+            y_pred.append(pp)
+        except:
+            continue
+
+    target_names = ['neg 0', 'pos 1']
+    print (classification_report(y_true, y_pred, target_names=target_names))
+    return 
+
+# COMMAND ----------
+
+show_results(cvModel2,prediction2)
 
 # COMMAND ----------
 
@@ -239,37 +435,41 @@ pipeline = Pipeline(stages=[remover, hashingTF, idfModel, lr])
 # This will allow us to jointly choose parameters for all Pipeline stages.
 # A CrossValidator requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.
 # We use a ParamGridBuilder to construct a grid of parameters to search over.
+
+# Build the parameter grid
 paramGrid = ParamGridBuilder() \
     .addGrid(hashingTF.numFeatures, [10, 50]) \
     .addGrid(lr.regParam, [0.1, 0.01]) \
     .build()
 
-# COMMAND ----------
-
-
+# Create the CrossValidator
 crossval = CrossValidator(estimator=pipeline,
                           estimatorParamMaps=paramGrid,
                           evaluator=BinaryClassificationEvaluator(),
-                          numFolds=3) 
+                          numFolds=3)
 
-# Run cross-validation, and choose the best set of parameters.
 cvModel = crossval.fit(training)
-
-# Make predictions on test documents. cvModel uses the best model found (lrModel).
+# Run cross-validation, and choose the best set of parameters.
 prediction = cvModel.transform(test)
-
 
 # COMMAND ----------
 
-selected = prediction.select("reviewText", "label", "probability", "prediction").take(5)
-for row in selected:
-    print(row)
+# Get best model from cross-validator
+bestModel = cvModel.bestModel
 
-# Evaluate result with ROC
-evaluator = MulticlassClassificationEvaluator(
-    labelCol="label", metricName="accuracy")
-accuaracy= evaluator.evaluate(prediction)
+# COMMAND ----------
 
+# Compute AUC for test data
+evaluator = BinaryClassificationEvaluator()
+auc = evaluator.evaluate(bestModel.transform(test))
+print("AUC = %g" % auc)
+
+# COMMAND ----------
+
+# Compute accuracy for test data
+evaluator = MulticlassClassificationEvaluator(metricName='accuracy')
+accuracy = evaluator.evaluate(bestModel.transform(test))
+print("Accuracy = %g" % accuracy)
 
 # COMMAND ----------
 
@@ -278,13 +478,24 @@ accuaracy= evaluator.evaluate(prediction)
 
 # COMMAND ----------
 
+import mlflow
+
 with mlflow.start_run():
-    mlflow.spark.log_model(cvModel, "model_sentiment_analysis")
+    mlflow.spark.log_model(cvModel, "model_sentiment_analysis2")
 
 # COMMAND ----------
 
-logged_model = 'runs:/15082a6cf007425797b1efa40192f2cf/best_model'
+logged_model = 'runs:/d808cc2da1174a4bbb0642dc2bb7651b/model_sentiment_analysis2'
 
 # Load model
 loaded_model = mlflow.spark.load_model(logged_model)
 
+
+# COMMAND ----------
+
+# Perform inference via model.transform()
+prediction_test=loaded_model.transform(test)
+
+# COMMAND ----------
+
+display(prediction_test.select("reviewText","prediction").limit(10))
