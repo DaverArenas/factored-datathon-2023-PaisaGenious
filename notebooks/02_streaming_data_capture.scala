@@ -24,7 +24,7 @@ eventHubsConf.setConsumerGroup(consumerGroup)
 eventHubsConf.setStartingPosition(startingPosition)
 eventHubsConf.setMaxEventsPerTrigger(maxEventsPerTrigger)
 
-val rowsInEH_Stream = 70222
+val rowsInEH_Stream = spark.table("bronze.eh_streaming").count()
 
 val df = spark
   .readStream
