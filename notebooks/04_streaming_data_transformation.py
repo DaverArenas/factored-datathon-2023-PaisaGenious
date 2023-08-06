@@ -47,7 +47,7 @@ silver_reviews_streaming = spark.readStream \
                             .trigger(availableNow=True) \
                             .toTable(silver_streaming)
 
-silver_reviews_streaming.awaitTermination(1 * 60 * 1000)
+silver_reviews_streaming.awaitTermination(2 * 60 * 1000)
 
 # COMMAND ----------
 

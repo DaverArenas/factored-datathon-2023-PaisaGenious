@@ -1,26 +1,25 @@
 # Databricks notebook source
-# Load the Delta table into a DataFrame
-df_reviews = spark.read.format("delta").load("s3://1-factored-datathon-2023-lakehouse/gold/review_cleaned2")
+df = spark.table("gold.amazon_reviews_gold")
 
+# COMMAND ----------
+
+!pip install nltk
 
 # COMMAND ----------
 
 from pyspark.sql import functions as F
-from pyspark.sql.functions import lower,col,regexp_replace,when,rand,regexp_extract
+from pyspark.sql.functions import lower,col,regexp_replace,when,rand,regexp_extract,length
 from pyspark.sql.types import IntegerType, StringType,FloatType
 import re
 from pyspark.sql.types import DecimalType
 from pyspark.sql.window import Window
 import html
 
+from nltk.corpus import stopwords
+import nltk
+from pyspark.ml.feature import StopWordsRemover
+from pyspark.ml.feature import HashingTF, IDF, Tokenizer
 
-# COMMAND ----------
-
-union_df = spark.table("gold.reviews_details")
-
-# COMMAND ----------
-
-display(union_df)
 
 # COMMAND ----------
 
@@ -30,7 +29,7 @@ display(union_df)
 # COMMAND ----------
 
 # Count the occurrences of each rating value
-rating_counts = df_reviews.groupBy('overall').count().orderBy('overall')
+rating_counts = df.groupBy('overall').count().orderBy('overall')
 display(rating_counts)
 
 # COMMAND ----------
@@ -41,21 +40,11 @@ display(rating_counts)
 # COMMAND ----------
 
 # Filter data for verified purchases with 'overall' rating
-verified_purchases = df_reviews.select('verified','overall')
+verified_purchases = df.select('verified','overall')
 
 verified_purchases =verified_purchases.groupBy("overall", "verified").count().orderBy("overall")
 # Show the DataFrame with both verified and not verified purchases and their 'overall' ratings
 display(verified_purchases)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ##### Distribution of review lenghts in characters
-
-# COMMAND ----------
-
-# Calculate the length of each review in characters
-display(df_reviews.select('review_length_chars'))
 
 # COMMAND ----------
 
@@ -65,16 +54,7 @@ display(df_reviews.select('review_length_chars'))
 # COMMAND ----------
 
 # Calculate the length of each review in words and create a new column 'review_length_words'
-display(df_reviews.select('review_length_words'))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ##### Relationship between length of the review and overall ratings
-
-# COMMAND ----------
-
-display(df_reviews.select('review_length_words', 'overall'))
+display(df.select('review_length_words'))
 
 # COMMAND ----------
 
@@ -84,7 +64,7 @@ display(df_reviews.select('review_length_words', 'overall'))
 # COMMAND ----------
 
 #average ratings grouped by 'reviewTime')
-averageRatingsByDate = df_reviews\
+averageRatingsByDate = df\
     .groupBy("year") \
     .agg(F.avg("overall").alias("averageRating")) \
     .orderBy("year")
@@ -99,7 +79,7 @@ display(averageRatingsByDate)
 
 # COMMAND ----------
 
-averageRatingsByMonth = df_reviews\
+averageRatingsByMonth = df\
     .groupBy("month") \
     .agg(F.avg("overall").alias("averageRating")) \
     .orderBy("month")
@@ -114,7 +94,7 @@ display(averageRatingsByMonth)
 
 # COMMAND ----------
 
-ReviewsYear = df_reviews\
+ReviewsYear = df\
     .groupBy("year").count().orderBy("year")
 
 # Display the Results
@@ -127,7 +107,7 @@ display(ReviewsYear)
 
 # COMMAND ----------
 
-ReviewsMonth = df_reviews\
+ReviewsMonth = df\
     .groupBy("month").count()
 
 # Display the Results
@@ -141,11 +121,19 @@ display(ReviewsMonth)
 # COMMAND ----------
 
 # Add a new column "sentiment_label" based on sentiment polarity
-union_df = df_reviews.withColumn("sentiment", 
-                                   when(col("overall") < 3.0, "Negative")
+df = df.withColumn("sentiment", when(col("overall") < 3.0, "Negative")
                                    .when(col("overall") == 3.0, "Neutral")
                                    .when(col("overall") > 3.0, "Positive"))
-display(union_df.groupBy('sentiment').count())
+display(df.groupBy('sentiment').count())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##### Relationship between length of the review and sentiment
+
+# COMMAND ----------
+
+display(df.select('review_length_words', 'sentiment'))
 
 # COMMAND ----------
 
@@ -154,96 +142,12 @@ display(union_df.groupBy('sentiment').count())
 
 # COMMAND ----------
 
-display(union_df)
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC #### Data imputation - main_cat
-
-# COMMAND ----------
-
-def unescape_html(text):
-    if text is not None:
-        return html.unescape(text)
-
-unescape_udf = udf(unescape_html, StringType())
-
-new_df = union_df.withColumn("main_cat", when(col("main_cat").isNull(), "undefined").otherwise(unescape_udf(col("main_cat"))))
-#new_df= union_df.withColumn("main_cat", unescape_udf(col("main_cat")))
-
-new_df = new_df.withColumn("extracted_cat", when(col("main_cat")\
-    .like('<img src=%'), regexp_extract(col("main_cat"), 'alt="([^"]+)"', 1)).otherwise(col("main_cat")))
-
-new_df = new_df.withColumn("extracted_cat",F.when(F.col("extracted_cat")=="undefined", F.col('category').getItem(0))\
-    .otherwise(F.col("extracted_cat")))
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC #### Data imputation - price
-
-# COMMAND ----------
-
-# Define a function to calculate the average price
-def calculate_average_price(price):
-
-    if price is not None:
-        # Regular expression to match price ranges
-        range_pattern = r"\$(\d+(?:\.\d+)?)\s*-\s*\$(\d+(?:\.\d+)?)"
-        if "-" in price:
-            range_match = re.match(range_pattern, price)
-            if range_match:
-                try:
-                    min_price = float(range_match.group(1))
-                    max_price = float(range_match.group(2))
-                    avg_price = (min_price + max_price) / 2
-                    return avg_price
-                except (ValueError, IndexError):
-                    return None
-        elif "$" in price:
-            try:
-                return float(price.strip('$'))
-            except ValueError:
-                return None
-        
-        elif price=="":
-            return None
-
-
-        
-# Register the function as a UDF (User-Defined Function)
-calculate_avg_price_udf = F.udf(calculate_average_price, FloatType())
-
-# Create a new column "average_price" using the UDF to calculate the average price
-#df =new_df.withColumn("average_price", when(col("price").isNull(), 0).otherwise(calculate_avg_price_udf(F.col("price"))))
-df = new_df.withColumn("average_price", calculate_avg_price_udf(F.col("price")))
-
-# COMMAND ----------
-
-# Step 1: Calculate the mean for each "main_cat" category
-mean_df = df.groupBy("main_cat").agg(F.round(F.avg("average_price"),2).alias("mean_price"))
-
-# Step 2: Join the original DataFrame with the mean DataFrame to get the mean_price for each main_cat
-df = df.join(mean_df, on="main_cat", how="left")
-
-# Step 3: Replace null values in "average_price" column with the corresponding mean_price
-df = df.withColumn("average_price", F.when(F.col("average_price").isNull(), F.col("mean_price"))
-    .otherwise((F.col("average_price"))))
-
-#mean_value_total = df.selectExpr("mean(average_price)").collect()[0][0]
-
-# Paso 4: impute the rest of null values with the total average 
-#df = df.withColumn("average_price", col("average_price").fillna(mean_value_total))
-
-# Step 5: Drop the "mean_price" column, as it's no longer needed
-df = df.drop("mean_price")
-
+display(df.select("sentiment","Year"))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #### Number of reviews per category
+# MAGIC ####Total reviews per main cat
 
 # COMMAND ----------
 
@@ -251,7 +155,7 @@ df_grouped = df.groupBy("extracted_cat").agg(F.count("reviewText").alias("review
 
 # Order the DataFrame by the count in descending order
 df_sorted = df_grouped.orderBy(F.desc("review_count"))
-display(df_sorted)
+display(df_sorted.limit(10))
 
 # COMMAND ----------
 
@@ -263,10 +167,10 @@ display(df_sorted)
 averageRatingsByMainCat = df\
     .groupBy("extracted_cat") \
     .agg(F.avg("overall").alias("averageRating")) \
-    .orderBy(F.desc("averageRating"))
+    .orderBy(F.asc("averageRating"))
 
 # Display the Results
-display(averageRatingsByMainCat)
+display(averageRatingsByMainCat.limit(10))
 
 # COMMAND ----------
 
@@ -285,7 +189,7 @@ display(df.select("average_price"))
 # COMMAND ----------
 
 negative_reviews_df = df.filter((F.col("overall") < 3))
-display(negative_reviews_df.select("average_price","brand","extracted_cat","asin","title"))
+display(negative_reviews_df.groupBy("extracted_cat").count().orderBy(F.desc("count")).limit(10))
 
 # COMMAND ----------
 
@@ -306,8 +210,8 @@ display(top_10_products_n)
 
 # COMMAND ----------
 
-positive_reviews_df = df.filter((F.col("overall") > 3))
-display(positive_reviews_df.select("average_price","brand","extrated_cat","asin","title"))
+positive_reviews_df = df.filter((col("overall") > 3))
+display(positive_reviews_df.groupBy("extracted_cat").count().orderBy(F.desc("count")).limit(10))
 
 # COMMAND ----------
 
@@ -323,12 +227,190 @@ display(top_10_products_p)
 
 # COMMAND ----------
 
-df.write \
-    .format("delta") \
-    .mode("append") \
-    .option("overwriteSchema", "true") \
-    .save("s3://1-factored-datathon-2023-lakehouse/Bronze/review_metadata")
+# MAGIC %md
+# MAGIC ### Dashboard Sentiment analysis
+# MAGIC
 
 # COMMAND ----------
 
-df.write.format("delta").mode("overwrite").saveAsTable("gold.amazon_reviews_")
+# Group by 'sentiment' and count the occurrences
+sentiment_counts = df.groupBy('sentiment').count()
+
+# Calculate the total count for each sentiment label
+total_counts = df.groupBy('sentiment').agg({'sentiment': 'count'})
+
+# Rename the 'count' column to 'total_count'
+total_counts = total_counts.withColumnRenamed('count(sentiment)', 'total_count')
+
+# Create a new DataFrame with the 'Total' sentiment and the total count
+total_row = spark.createDataFrame([("Total", total_counts.groupBy().sum('total_count').collect()[0][0])], ["sentiment", "total_count"])
+
+# Union the original DataFrame with the total_row DataFrame
+result_df = sentiment_counts.union(total_row)
+display(result_df)
+
+# COMMAND ----------
+
+counter_users=df.groupBy("reviewerID").count().orderBy(F.desc("count"))
+display(counter_users)
+
+# COMMAND ----------
+
+# Total number of reviews
+total_reviews = df.count()
+
+# Total number of unique products (asin)
+total_unique_products = df.select("asin").distinct().count()
+
+# Total number of unique users (reviewerId)
+total_unique_users = df.select("reviewerID").distinct().count()
+
+# Creating a new DataFrame with the desired statistics
+statistics_df = spark.createDataFrame([
+    (total_reviews, total_unique_products, total_unique_users)
+], ["Total Reviews", "Total Unique Products", "Total Unique Users"])
+
+# COMMAND ----------
+
+display(statistics_df)
+
+# COMMAND ----------
+
+display(counter_users.limit(10))
+
+# COMMAND ----------
+
+display(df.select("overall","Year","sentiment"))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Wordcloud
+
+# COMMAND ----------
+
+dfword=df.select("reviewText")
+# Drop rows with null or NaN values in the 'reviewText' column
+dfword = dfword.dropna(subset=["reviewText"])
+
+# COMMAND ----------
+
+# Function to remove non-word characters using regex
+def remove_special_characters(text):
+    return re.sub(r'[^\w\s]', '', text)
+
+# Register UDF
+remove_special_characters_udf = udf(remove_special_characters, StringType())
+
+# Apply UDF to remove non-word characters from the 'Text' column
+df_cleaned_review = dfword.withColumn('cleanedReviewText', remove_special_characters_udf(col('reviewText')))
+
+# COMMAND ----------
+
+# Function to remove HTML tags using regex
+def remove_html(text):
+    cleanr = re.compile('<.*?>')
+    cleanr2 = re.compile('<.*?</a>')
+    textm=re.sub(cleanr2, '', text)
+    textf=re.sub(cleanr, '', textm)
+    return textf
+
+# Register UDF
+remove_html_udf = udf(remove_html, StringType())
+
+# Apply UDF to remove HTML tags from the 'Text' column
+df_cleaned_review= df_cleaned_review.withColumn("cleanedReviewText", remove_html_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# Function to convert text to lowercase and join
+def lowercase_and_join(text):
+    return " ".join(word.lower() for word in text.split())
+
+# Register UDF
+lowercase_and_join_udf = udf(lowercase_and_join, StringType())
+
+# Apply UDF to convert the text to lowercase and join it back
+df_cleaned_review= df_cleaned_review.withColumn('cleanedReviewText', lowercase_and_join_udf(col('cleanedReviewText')))
+
+# COMMAND ----------
+
+# Function to remove URLs using regex
+def remove_url(text):
+    url = re.compile(r'https?://\S+|www\.\S+')
+    return url.sub(r'', text)
+
+# Register UDF
+remove_url_udf = udf(remove_url, StringType())
+
+# Apply UDF to remove URLs from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn("cleanedReviewText", remove_url_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# Function to remove emojis using regex
+def remove_emoji(text):
+    emoji_pattern = re.compile("["
+                               u"\U0001F600-\U0001F64F"  # emoticons
+                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                               u"\U0001F1E0-\U0001F1FF"  # flags
+                               u"\U00002702-\U000027B0"
+                               u"\U000024C2-\U0001F251"
+                               "]+", flags=re.UNICODE)
+    
+    return emoji_pattern.sub(r'', text)
+
+# Register UDF
+remove_emoji_udf = udf(remove_emoji, StringType())
+
+# Apply UDF to remove emojis from the 'Text' column
+df_cleaned_review = df_cleaned_review.withColumn("cleanedReviewText", remove_emoji_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+def remove_emoticons(text):
+    emoticon_pattern = re.compile(r'(?::|;|=)(?:-)?(?:\)|\(|D|P)')
+    return emoticon_pattern.sub(r'', text)
+
+# Register UDF
+remove_emoticons_udf = udf(remove_emoticons, StringType())
+
+# Apply UDF to remove emoticons from the 'Text' column
+df_cleaned_review= df_cleaned_review.withColumn("cleanedReviewText", remove_emoticons_udf(col("cleanedReviewText")))
+
+# COMMAND ----------
+
+# Use regexp_replace to remove numerical characters from the 'text_column'
+df_cleaned_review= df_cleaned_review.withColumn("cleanedReviewText",regexp_replace(col("cleanedReviewText"), r'\d+', ''))
+# Remove rows with cleanedReviewText as "" or with less than 4 characters
+df_cleaned_review = df_cleaned_review.filter((length(col("cleanedReviewText")) >= 4) & (col("cleanedReviewText") != ""))
+#df=df_cleaned_review.select("cleanedReviewText","label")
+
+# COMMAND ----------
+
+# Tokenize the review. 
+tokenizer = Tokenizer(inputCol="cleanedReviewText", outputCol="review_words")
+wordsDF = tokenizer.transform(df_cleaned_review)
+#wordsDF.show(2)
+
+# COMMAND ----------
+
+# Remove stop words
+remover = StopWordsRemover(inputCol="review_words", outputCol="filtered")
+wordsDF2 = remover.transform(wordsDF)
+#wordsDF2.show(10)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import explode, count
+
+new_df =wordsDF2.select(explode("filtered").alias("word")) \
+           .groupBy("word") \
+           .agg(count("*").alias("frequency"))
+
+
+# COMMAND ----------
+
+df_wordcloud=new_df.orderBy(F.desc("frequency"))
+display(df_wordcloud.limit(3000))

@@ -24,6 +24,8 @@ eventHubsConf.setConsumerGroup(consumerGroup)
 eventHubsConf.setStartingPosition(startingPosition)
 eventHubsConf.setMaxEventsPerTrigger(maxEventsPerTrigger)
 
+val rowsInEH_Stream = 70222
+
 val df = spark
   .readStream
   .format("eventhubs")
@@ -42,10 +44,10 @@ query.awaitTermination(1 * 60 * 1000)
 
 // COMMAND ----------
 
-val rowsInEH_Stream = spark.table("bronze.eh_streaming").count()
-if (rowsInEH_Stream >= 10000) {
+val newEH_Stream = spark.table("bronze.eh_streaming").count()
+if (newEH_Stream >= rowsInEH_Stream + 10000) {
   query.stop()
-}
+} 
 
 // COMMAND ----------
 
