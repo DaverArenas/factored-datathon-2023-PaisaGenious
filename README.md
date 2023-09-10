@@ -1,6 +1,6 @@
 # Factored-datathon-2023
 
-# 🏆 Welcome to the Winning Solution of Factored 2023 Datathon 🏆
+# 🏆 Welcome to the Winning Solution of Datathon 2023 🏆
 
 <p align="center">
   <img src="overview/podium.jpg" "Factored Datathon 2023 Champions" alt="Alt Text" style="margin-left: 50px;">
