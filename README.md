@@ -8,6 +8,7 @@
     </p>
 Feel free to explore our solution; 
 we are thrilled to have emerged victorious in the Factored Datathon 2023. Dive in and discover our journey 🚀🔍🌟
+
 <br>
 
 **Explore the frontend here: https://main.dpnxkh6elbeqw.amplifyapp.com/**
@@ -59,7 +60,7 @@ For this challenge, Team Paisa Genious proposes a Delta Lakehouse architecture u
   </tr>
 </table>
 
-## 4. **Data Engineering: Dealing with the Extraction and Transformation of the data**
+## 4. **Data Engineering: Extraction and Transformation of the data**
 
 The data engineering solution we implemented showcases a remarkable combination of Databricks Auto Loader's incremental ingestion capabilities and Spark's streamlined processing using Structured Streaming. This approach enables us to handle large-scale data processing efficiently in a distributed environment while maintaining the convenience of batch-like operations for optimal results.
 
@@ -195,8 +196,8 @@ Our frontend aimed to provide an intuitive interface for users to interact with 
 - **Dashboard:** We designed interactive dashboards using Databricks to visualize the results and findings from our data analytics and machine learning processes.
  
     <p align="center">
-      <img src="overview/dashboard2.png" alt="Dashboard 1" style="width: 43%; margin: 0 5px;">
-      <img src="overview/dashboard1.png" alt="Dashboard 2" style="width: 53.3%; margin: 0 5px;">
+      <img src="overview/dashboard2.png" alt="Dashboard 1" style="width: 80%; margin: 0 5px;">
+      <img src="overview/dashboard1.png" alt="Dashboard 2" style="width: 80%; margin: 0 5px;">
     </p>
 
 ### 6.2 Continuous Deployment with AWS Amplify
