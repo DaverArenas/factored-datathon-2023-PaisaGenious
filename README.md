@@ -1,4 +1,4 @@
-<h1 align="center"> Factored-Datathon-2023 </h1>
+# Factored-Datathon-2023
 
 <h1 align="center"> 🏆 Welcome to the Winning Solution 🏆 </h1>
 
