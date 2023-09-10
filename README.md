@@ -1,21 +1,15 @@
-<center>
+<h1 align="center"> Factored-datathon-2023 </h1>
 
-# Factored-datathon-2023
-
-</center>
-
-<center>
-
-# 🏆 Welcome to the Winning Solution 🏆
-
-</center>
+<h1 align="center"> 🏆 Welcome to the Winning Solution 🏆 </h1>
 
 <p align="center">
   <img src="overview/podium.jpg" "Factored Datathon 2023 Champions" alt="Alt Text" style="margin-left: 50px;">
 </p>
+
 <p align="center">
 🌟 Top Honors: Paisa Genious' Factored Datathon Triumph 🌟
 </p>
+
 Feel free to explore our solution; 
 we are thrilled to have emerged victorious in the Factored Datathon 2023. Dive in and discover our journey 🚀🔍🌟
 
