@@ -8,6 +8,7 @@
     </p>
 Feel free to explore our solution; 
 we are thrilled to have emerged victorious in the Factored Datathon 2023. Dive in and discover our journey 🚀🔍🌟
+<br>
 
 **Explore the frontend here: https://main.dpnxkh6elbeqw.amplifyapp.com/**
 
@@ -96,7 +97,7 @@ The data engineering solution we implemented showcases a remarkable combination 
 
     As part of the data processing pipeline, we leverage the power of Spark SQL to parse and clean the raw event data obtained from the event hub. A temporary view called "events_strings" is created to parse the raw event body into a readable JSON format, and another temporary view called "parsed_events" is created to extract specific fields from the JSON data. This parsing process ensures that the data is well-structured and organized for seamless integration into downstream analytics processes. To guarantee the integrity and consistency of the data, we adopt an incremental loading strategy when transferring the processed data from the temporary view "parsed_events" to the target Delta table, "bronze.reviews_streaming." We leverage the **MERGE** statement, which identifies the presence of matching "offset" values between the source and destination tables, this approach effectively avoids the duplication
 
-  - **Streaming data processing**
+  - **Streaming data transformation**
 
     To keep the silver layer up-to-date in real-time, the streaming data is loaded from the "bronze.eh_streaming" table into the "silver.reviews_streaming" table using Spark Structured Streaming. The data is transformed in real-time, including casting the "overall" column to a DecimalType and converting the "unixReviewTime" column to a date format. Additionally, a "processing_time" column is added to capture the time of data processing. This ensures that the silver layer remains continuously updated with the latest transformed data.
   
@@ -118,7 +119,9 @@ The data engineering solution we implemented showcases a remarkable combination 
   - **Pipeline from Silver to Gold**
 
     In this section, we will discuss the data engineering pipeline responsible for transforming Amazon reviews data from both batch and streaming sources into the Gold layer, where we focus on generating business-level aggregates for analytics and machine learning purposes. The initial step of the pipeline involves joining data from both batch and streaming sources, this unified dataset serves as the foundation for subsequent transformations and analyses. Following the data integration step, we transform string-based product prices into integer values to obtain the actual price of products. Additionally, we perform imputation of missing price categories using the mean value from existing data. We also address data quality by removing any HTML tags present in columns such as main category, brand, and titles. Furthermore, we apply general text processing strategies to handle any other missing or incomplete data, ensuring a thorough data cleansing process.
-      
+
+  - **Pipeline from Gold to Downstream applications**
+
     The Gold layer aims to deliver continuously updated, clean data to downstream users and applications, including machine learning models, ad-hoc queries, and analytics tools.
     By implementing these transformations and data cleansing strategies, we ensure that the Gold layer provides accurate and reliable business-level aggregates, facilitating valuable insights for various stakeholders within the organization. This unified dataset, derived from both batch and streaming sources, serves as a powerful resource for analytics and machine learning purposes, empowering data-driven decision-making and driving the organization's success.
 
@@ -169,8 +172,8 @@ The data engineering solution we implemented showcases a remarkable combination 
     To prevent overfitting and assess the model's generalization performance, we implemented k-fold cross-validation using PySpark's CrossValidator. This process split the dataset into k-folds and trained the model on different combinations of the folds, providing robust performance estimates.
 
 - ### Evaluation and Results:
-    The sentiment analysis model's performance was evaluated using the metrics showed in the following image:
-  
+    The sentiment analysis model's performance was evaluated using the metrics showed in the following image: 
+
     <p align="center">
       <img src="overview/metrics sentiment_analysis.jpg" alt="Alt Text" style="margin-left: 50px; width: 40%; height: 50%;">
     </p>
@@ -192,8 +195,8 @@ Our frontend aimed to provide an intuitive interface for users to interact with 
 - **Dashboard:** We designed interactive dashboards using Databricks to visualize the results and findings from our data analytics and machine learning processes.
  
     <p align="center">
-      <img src="overview/dashboard2.png" alt="Dashboard 1" style="width: 40%; margin: 0 5px;">
-      <img src="overview/dashboard1.png" alt="Dashboard 2" style="width: 50%; margin: 0 5px;">
+      <img src="overview/dashboard2.png" alt="Dashboard 1" style="width: 43%; margin: 0 5px;">
+      <img src="overview/dashboard1.png" alt="Dashboard 2" style="width: 53.3%; margin: 0 5px;">
     </p>
 
 ### 6.2 Continuous Deployment with AWS Amplify
