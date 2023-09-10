@@ -8,10 +8,9 @@
     </p>
 Feel free to explore our solution; 
 we are thrilled to have emerged victorious in the Factored Datathon 2023. Dive in and discover our journey 🚀🔍🌟
-
 <br>
 
-**Explore the frontend here: https://main.dpnxkh6elbeqw.amplifyapp.com/**
+### **Explore the frontend here: https://main.dpnxkh6elbeqw.amplifyapp.com/**
 
 ## 1. **The Team: Paisa Genious**
 We are a team composed of two engineers in Medellín, Colombia.
