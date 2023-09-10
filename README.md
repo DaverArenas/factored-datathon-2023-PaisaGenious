@@ -1,6 +1,6 @@
-# Factored-Datathon-2023
+<h1 align="center"> Factored-Datathon-2023 </h1>
 
-<h1 align="center"> 🏆 Welcome to the Winning Solution 🏆 </h1>
+<h2 align="center"> 🏆 Welcome to the Winning Solution 🏆 </h2>
 
 <p align="center">
   <img src="overview/podium.jpg" "Factored Datathon 2023 Champions" alt="Alt Text" style="margin-left: 50px;">
