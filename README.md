@@ -1,17 +1,15 @@
 <h1 align="center"> Factored-Datathon-2023 </h1>
-
 <h2 align="center"> 🏆 Welcome to the Winning Solution 🏆 </h2>
-
 <p align="center">
-  <img src="overview/podium.jpg" "Factored Datathon 2023 Champions" alt="Alt Text" style="margin-left: 50px;">
+  <img src="overview/podium.jpg" alt="Alt Text" style="margin-left: 50px;">
 </p>
-
-<p align="center">
-🌟 Top Honors: Paisa Genious' Factored Datathon Triumph 🌟
-</p>
-
+    <p align="center">
+    🌟 Top Honors: Paisa Genious' Factored Datathon Triumph 🌟
+    </p>
 Feel free to explore our solution; 
 we are thrilled to have emerged victorious in the Factored Datathon 2023. Dive in and discover our journey 🚀🔍🌟
+
+**Explore the frontend here: https://main.dpnxkh6elbeqw.amplifyapp.com/**
 
 ## 1. **The Team: Paisa Genious**
 We are a team composed of two engineers in Medellín, Colombia.
@@ -75,14 +73,20 @@ The data engineering solution we implemented showcases a remarkable combination 
 
       We employed Spark Structured Streaming to handle data processing and transformation tasks, to turn the streaming query into a batch-like behavior, we strategically incorporated .trigger(availableNow=True) in the Spark Structured Streaming job. This allowed us to process all available data from the bronze tables, thereby ensuring comprehensive data processing at each execution. We created two managed tables in the silver layer named "silver.amazon_metadata" and "silver.amazon_reviews." These tables contain deduplicated, and transformed data
 
+  <br>
+
   <p align="center">
     <img src="overview/Data_Platform_Batch.jpg" alt="Alt Text" style="margin-left: 50px;">
   </p>
 
+  <br>
+  
   -   **Workflow Automation**
 
       To ensure seamless execution of the data capture and data processing tasks on a daily basis, we designed a robust workflow in Databricks. This workflow triggers and executes the two notebooks in sequence, orchestrating the entire data pipeline efficiently. The first notebook, "batch_data_capture," utilizes Databricks Auto Loader to load the latest data into the bronze layer tables. Subsequently, the second notebook, "04_batch_data_transformation," leverages Spark Structured Streaming to process and transform the data into clean and deduplicated tables within the silver layer. By automating this workflow, we achieve regular updates to the silver layer and maintain data accuracy and freshness.
 
+  <br>
+  
   <p align="center">
     <img src="overview/pipeline_run_batch.jpg" alt="Alt Text" style="margin-left: 50px;">
   </p>
@@ -101,20 +105,25 @@ The data engineering solution we implemented showcases a remarkable combination 
 
       To keep the silver layer up-to-date in real-time, the streaming data is loaded from the "bronze.eh_streaming" table into the "silver.reviews_streaming" table using Spark Structured Streaming. The data is transformed in real-time, including casting the "overall" column to a DecimalType and converting the "unixReviewTime" column to a date format. Additionally, a "processing_time" column is added to capture the time of data processing. This ensures that the silver layer remains continuously updated with the latest transformed data.
 
+  <br>
+  
     <p align="center">
       <img src="overview/Data_Platform-stream.jpg" alt="Alt Text" style="margin-left: 50px;">
     </p>
 
-
+  <br>
+  
     - **Workflow Automation**
 
       A workflow is established in Databricks to orchestrate and automate the streaming data capture and data processing tasks on a daily basis. This workflow triggers and executes the relevant notebooks in sequence, providing a seamless and efficient data pipeline. The streaming data capture and processing jobs run at regular intervals, ensuring the silver layer is always kept current and accurate.
 
-
+  <br>
+  
     <p align="center">
       <img src="overview/pipeline_run_streaming.jpg" alt="Alt Text" style="margin-left: 50px;">
     </p>
 
+  
 - ### ***Gold Layer: Business level Aggregates***
 
     - **Pipeline from Silver to Gold**
@@ -124,7 +133,8 @@ The data engineering solution we implemented showcases a remarkable combination 
       The Gold layer aims to deliver continuously updated, clean data to downstream users and applications, including machine learning models, ad-hoc queries, and analytics tools.
 
       By implementing these transformations and data cleansing strategies, we ensure that the Gold layer provides accurate and reliable business-level aggregates, facilitating valuable insights for various stakeholders within the organization. This unified dataset, derived from both batch and streaming sources, serves as a powerful resource for analytics and machine learning purposes, empowering data-driven decision-making and driving the organization's success.
-
+      
+    <br>
       <p align="center">
         <img src="overview/gold-layer.png" alt="Alt Text" style="margin-left: 50px;">
       </p>
@@ -137,13 +147,12 @@ The data engineering solution we implemented showcases a remarkable combination 
 
 
 - ### Sentiment Analysis Model
-
+  
     <p align="center">
       <img src="overview/Sentiment model.jpg" alt="Alt Text" style="margin-left: 50px;">
     </p>
-
-
-      
+    <br>
+  
     - **Dataset**:
 
       The final dataset used for sentiment analysis contains 12.000.000 Amazon reviews after having performed undersampling to balance the labels categorized into 2 classes: positive and negative. Before training, we performed data cleaning to remove any irrelevant information, suh as html tags, puntuaction, urls, numerical characters, etc, and tokenized the reviews for further analysis.
@@ -176,44 +185,60 @@ The data engineering solution we implemented showcases a remarkable combination 
     ### Evaluation and Results:
     The sentiment analysis model's performance was evaluated using the metrics showed in the following image:
 
+  <br>
+  
     <p align="center">
       <img src="overview/metrics sentiment_analysis.jpg" alt="Alt Text" style="margin-left: 50px; width: 40%; height: 50%;">
     </p>
-
-    
-    
+ 
+  <br>
+  
     The accuracy of 0.658 indicates that the model is correctly classifying sentiments for approximately 65.8% of the test instances. While this is better than random guessing, there is still room for improvement to achieve higher accuracy.
 
     The F1 score of 0.657 combines both precision and recall metrics and is a good measure of overall model performance, especially for imbalanced datasets. It is encouraging that the F1 score is close to the accuracy score, suggesting that the model is performing consistently across classes.
 
     The AUC-ROC score of 0.701 indicates that the model has a moderate ability to discriminate between positive and negative sentiments. An AUC value greater than 0.5 indicates that the model performs better than random guessing, but improvements can be made to increase the AUC value further.
 
-    ### Further Improvements:
+## 6. **Frontend and Continuous Deployment**
 
-    - **Model performance**:
+We decided to develop a frontend that encapsulates and presents the main components of our data solution. For the frontend, we chose to use plain HTML, keeping it simple and efficient while focusing on a seamless user experience.
 
-      The model seems to be performing reasonably well, but it may benefit from further optimization and tuning to achieve higher accuracy and AUC-ROC scores.
-      It is neccesary to consider exploring hyperparameter tuning, experimenting with different model architectures, and utilizing more advanced pre-trained language models to boost performance.
+### Frontend Solution
 
-      In the context of sentiment analysis, data preprocessing plays a critical role in shaping the quality and relevance of the text data used for training and testing the model. While the current data preprocessing steps have provided a foundation for sentiment analysis, further improvements through deeper data cleaning are expected to yield several potential benefits, such as: 
+Our frontend aimed to provide an intuitive interface for users to interact with the data and insights generated by our solution. The key components and features of our frontend include:
 
-      - Enhanced Text Normalization
-      - Handling Slang and Abbreviations
-      - Handling Negations and Emphasis
-      - Addressing Class Imbalance
-      - Better Generalization
+- **Dashboard:** We designed interactive dashboards that visualizes the results and findings from our data analytics and machine learning processes.
 
-      While the current sentiment analysis model has shown promising results, embracing more advanced data preprocessing techniques can unlock its full potential. By addressing specific linguistic challenges and fine-tuning the text data, we can expect improved accuracy, enhanced discrimination between sentiment classes, and a more reliable and informative sentiment analysis system
+  <br>
+  
+    <p align="center">
+      <img src="overview/dashboard2.png" alt="Dashboard 1" style="width: 40%; margin: 0 5px;">
+      <img src="overview/dashboard1.png" alt="Dashboard 2" style="width: 50%; margin: 0 5px;">
+    </p>
+
+### Continuous Deployment with AWS Amplify
+
+For hosting our frontend and the associated dashboards, we harnessed the power of AWS Amplify. This cloud service not only simplified the deployment process but also streamlined the integration with our GitHub repository.
+
+#### Key Benefits of AWS Amplify for Continuous Deployment:
+
+1. **Automation:** AWS Amplify automated the building and deployment of changes whenever commits were pushed to our repository. This eliminated the need for manual deployment and ensured that the latest version of our frontend was always available to users.
+
+2. **Scalability:** As our user base grew, AWS Amplify effortlessly scaled our hosting resources, ensuring consistent performance and reliability.
+
+3. **Integration:** The seamless integration with GitHub allowed our development team to focus on coding while Amplify took care of the deployment pipeline.
+
+4. **Secure and Compliant:** AWS Amplify adheres to industry best practices for security and compliance, giving us peace of mind that our frontend was hosted in a secure environment.
+
+5. **Monitoring and Analytics:** Amplify provides built-in monitoring and analytics tools, enabling us to gain insights into user behavior and optimize our frontend accordingly.
+
+By choosing AWS Amplify for continuous deployment, we ensured that our frontend was not only user-friendly but also highly available, scalable, and reliable.
+
+<p align="center">
+      <img src="overview/deployment_workflow.png" alt="Dashboard 1" style="width: 80%; margin: 0 5px;">
+</p>
+
+---
 
 
-    - **Deployment Challenges**:
-
-      The decision not to deploy the model due to the cost of computational resources is understandable. Sentiment analysis models often require significant computational power, especially if they are based on complex deep learning architectures.Cloud-based solutions or optimizing the model for inference on resource-constrained devices might be a possible solution for this.
- 
-      Deploying the sentiment analysis model is a pivotal step in bringing its valuable insights to real-world applications. By making the model accessible to end-users, we enable businesses and individuals to gain deeper understanding from Amazon reviews and make data-driven decisions: Real-
-
-      - Real-Time Decision Making
-      - Customer Sentiment Monitoring
-      - Product and Service Enhancement
-      - Brand Reputation Management
 
