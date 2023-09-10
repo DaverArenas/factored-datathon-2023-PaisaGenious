@@ -20,15 +20,15 @@ We are a team composed of two engineers in Medellín, Colombia.
 
 ## 2. **The challenge: Factored Datathon 2023**
 
-- ### ***Overview***
+### ***Overview***
 
 The challenge for the Datathon is to effectively integrate batch and streaming data sources, and combine them to feed the source of truth for analytics and machine learning purposes, to extract valuable patterns, trends, and correlations, enhancing the ability of the business to develop innovative and impactful solutions
 
-- ### ***Data Sources***
+### ***Data Sources***
 
 Datathon involved two data sources available for the competition: 
-* The first source involves two batch-format tables stored in an Azure Data Lake Storage instance.
-* The second source involves Amazon Product Reviews, available in streaming mode stored in Azure Event Hub. Our team will be connecting for a specific group created to consume a specific topic.
+- The first source involves two batch-format tables stored in an Azure Data Lake Storage instance.
+- The second source involves Amazon Product Reviews, available in streaming mode stored in Azure Event Hub. Our team will be connecting for a specific group created to consume a specific topic.
 
 
 ## 3. **The Solution: AWS cloud and Databricks Lakehouse Architecture**
@@ -76,7 +76,6 @@ The data engineering solution we implemented showcases a remarkable combination 
     <img src="overview/Data_Platform_Batch.jpg" alt="Alt Text" style="margin-left: 50px;">
   </p>
 
-  
   -   **Workflow Automation**
 
       To ensure seamless execution of the data capture and data processing tasks on a daily basis, we designed a robust workflow in Databricks. This workflow triggers and executes the two notebooks in sequence, orchestrating the entire data pipeline efficiently. The first notebook, "batch_data_capture," utilizes Databricks Auto Loader to load the latest data into the bronze layer tables. Subsequently, the second notebook, "04_batch_data_transformation," leverages Spark Structured Streaming to process and transform the data into clean and deduplicated tables within the silver layer. By automating this workflow, we achieve regular updates to the silver layer and maintain data accuracy and freshness.
@@ -100,20 +99,14 @@ The data engineering solution we implemented showcases a remarkable combination 
     - **Streaming data processing**
 
       To keep the silver layer up-to-date in real-time, the streaming data is loaded from the "bronze.eh_streaming" table into the "silver.reviews_streaming" table using Spark Structured Streaming. The data is transformed in real-time, including casting the "overall" column to a DecimalType and converting the "unixReviewTime" column to a date format. Additionally, a "processing_time" column is added to capture the time of data processing. This ensures that the silver layer remains continuously updated with the latest transformed data.
-
-  <br>
   
     <p align="center">
       <img src="overview/Data_Platform-stream.jpg" alt="Alt Text" style="margin-left: 50px;">
     </p>
-
-  <br>
   
     - **Workflow Automation**
 
       A workflow is established in Databricks to orchestrate and automate the streaming data capture and data processing tasks on a daily basis. This workflow triggers and executes the relevant notebooks in sequence, providing a seamless and efficient data pipeline. The streaming data capture and processing jobs run at regular intervals, ensuring the silver layer is always kept current and accurate.
-
-  <br>
   
     <p align="center">
       <img src="overview/pipeline_run_streaming.jpg" alt="Alt Text" style="margin-left: 50px;">
